@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1803,
+  "plan_revision": 1804,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -61,7 +61,7 @@
     ]
   },
   "baseline_commit": "acdfda4daab7f8b5aba0be784cdf3d5190cd452f",
-  "current_task_id": "T008",
+  "current_task_id": null,
   "context_pack": {
     "documents": [
       {
@@ -431,8 +431,8 @@
       ]
     },
     {
-      "implementation_status": "IN_PROGRESS",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T008",
@@ -466,7 +466,11 @@
         "До DOCS пройдены release-source и codex-tools-live; ни один build/sign/install/publish не начат."
       ],
       "expected_commit_message": "feat: Подготовить источник выпуска 0.6.114 и проверки",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "package.json",
+        "package-lock.json"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -620,8 +624,8 @@
 Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
-Current Task: T008
-Revision: 1803
+Current Task: нет
+Revision: 1804
 
 ## Цель
 
@@ -686,8 +690,8 @@ Revision: 1803
   - Файлы: src/main.mjs, src/chat-session-rotation.mjs, tests/chat-session-rotation.test.mjs, tests/electron-smoke.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: нет
-- [IN_PROGRESS] T008: Подготовить источник выпуска 0.6.114 и проверки — В работе
-  - Git Commit: [PENDING] feat: Подготовить источник выпуска 0.6.114 и проверки
+- [DONE] T008: Подготовить источник выпуска 0.6.114 и проверки — Завершено
+  - Git Commit: [DONE] feat: Подготовить источник выпуска 0.6.114 и проверки
   - Reference: chat-session-rotation-20261011 / T008 / implementation
   - Файлы: package.json, package-lock.json, .harness/workflow.json, scripts/check-installed-release.mjs, scripts/check-github-release.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

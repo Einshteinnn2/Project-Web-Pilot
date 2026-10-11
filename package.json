@@ -1,7 +1,7 @@
 {
   "name": "project-web-pilot",
   "productName": "Project Web Pilot",
-  "version": "0.6.113",
+  "version": "0.6.114",
   "description": "Локальный проект и ChatGPT в одном окне",
   "private": true,
   "type": "module",
