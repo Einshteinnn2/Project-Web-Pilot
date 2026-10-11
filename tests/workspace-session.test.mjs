@@ -106,6 +106,32 @@ test('forgetDeletedProject handles a child already removed by its own confirmed 
   assert.equal(store.project(foreign.workspace).sessionId,foreign.sessionId);
 });
 
+test('forgetOrphanExecutor is atomic for the exact project, parent link and all sessions',async t=>{
+  const {store,project}=await fixture(t);
+  const origin=await store.select(await project('Parent','shared-project'));
+  const worktree=await fs.realpath(await project('Executor','shared-project'));
+  const first=await store.ensureExecutor({id:'owned-worker',worktree,parent_root:origin.workspace,
+    parent_scope_id:'fixture-scope',parent_task_id:'T001',title:'Worker'},origin);
+  const second=await store.newChat(worktree);
+  const neighbour=await store.select(await project('Neighbour','separate'));
+  store.data.projects=store.data.projects.filter(p=>p.workspace!==origin.workspace);
+  await store.save();
+  const restart=new WorkspaceSessions(store.file);await restart.load();
+  const expected={workspace:worktree,projectId:first.projectId,parentWorkspace:origin.workspace,
+    parentProjectId:origin.projectId,sessionIds:[first.sessionId,second.sessionId]};
+  await assert.rejects(restart.forgetOrphanExecutor({...expected,sessionIds:[second.sessionId]}),
+    {code:'EXECUTOR_RECORD_CHANGED'});
+  await assert.rejects(restart.forgetOrphanExecutor({...expected,parentProjectId:'foreign'}),
+    {code:'EXECUTOR_RECORD_CHANGED'});
+  assert.equal(restart.project(worktree).ownershipState,'recovery');
+  assert.equal((await restart.forgetOrphanExecutor(expected)),true);
+  assert.equal(restart.project(worktree),null);
+  assert.equal(restart.project(neighbour.workspace).sessionId,neighbour.sessionId);
+  const loaded=new WorkspaceSessions(store.file);await loaded.load();
+  assert.deepEqual(loaded.snapshot().projects.map(p=>p.workspace),[neighbour.workspace]);
+  await assert.rejects(loaded.forgetOrphanExecutor(expected),{code:'EXECUTOR_RECORD_CHANGED'});
+});
+
 test('execution settings are captured at creation, independent of edits, selection and restart', async t => {
   const { project, store } = await fixture(t);
   let settings = { parallel_allowed: true, max_workers: 3 };

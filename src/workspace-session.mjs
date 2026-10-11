@@ -797,6 +797,21 @@ export class WorkspaceSessions {
     });
   }
 
+  forgetOrphanExecutor({workspace,projectId,parentWorkspace,parentProjectId,sessionIds}) {
+    return this.mutate(data=>{
+      const project=data.projects.find(p=>p.workspace===workspace);
+      if(!project)throw new WorkspaceError('EXECUTOR_RECORD_CHANGED','Запись исполнителя уже отсутствует. Обновите Настройки.');
+      if(project.projectId!==projectId||project.parentWorkspace!==parentWorkspace
+        ||project.parentProjectId!==parentProjectId||!parentProjectId
+        ||data.projects.some(p=>p.workspace===parentWorkspace)
+        ||JSON.stringify(project.sessions.map(s=>s.sessionId))!==JSON.stringify(sessionIds))
+        throw new WorkspaceError('EXECUTOR_RECORD_CHANGED','Запись исполнителя или его родитель изменились.');
+      data.projects=data.projects.filter(p=>p!==project);
+      if(data.selectedWorkspace===workspace)data.selectedWorkspace=null;
+      return true;
+    });
+  }
+
   forgetArchived(workspace, projectId) {
     return this.forgetArchivedMany([{ workspace, projectId }]).then(count => count > 0);
   }

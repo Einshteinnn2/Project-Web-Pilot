@@ -230,6 +230,62 @@ export class WorkspaceDeletion {
     // An inaccessible but present mount/root is not proof that the child is gone.
     await fs.readdir(anchor);
     if (await lstatOrNull(workspace)) fail('DELETE_PATH_CHANGED', 'Исходный путь снова занят. Очистка остановлена.');
+    return String(stat.dev);
+  }
+  async inspectOrphan({workspace,projectId}) {
+    if(typeof workspace!=='string'||!path.isAbsolute(workspace)||path.normalize(workspace)!==workspace
+      ||typeof projectId!=='string'||!projectId)fail('EXECUTOR_RECORD_CHANGED','Неверная запись исполнителя.');
+    const saved=this.store.snapshot().projects,child=saved.find(p=>p.workspace===workspace);
+    if(!child||child.projectId!==projectId)fail('EXECUTOR_RECORD_CHANGED','Исполнитель больше не соответствует выбранной записи.');
+    const parentWorkspace=child.parentWorkspace,parentProjectId=child.parentProjectId;
+    if(!parentWorkspace||!path.isAbsolute(parentWorkspace)
+      ||path.normalize(parentWorkspace)!==parentWorkspace||!parentProjectId
+      ||saved.some(p=>p.workspace===parentWorkspace)
+      ||!child.sessions.length||!child.sessions.some(s=>s.assignmentId)
+      ||child.sessions.some(s=>s.parentWorkspace!==parentWorkspace
+        ||s.parentProjectId!==parentProjectId)
+      ||child.sessions.filter(s=>s.assignmentId).some(s=>!s.executionOriginSessionId||!s.taskId||!s.parentScopeId
+        ||!s.assignmentId.match(/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/)
+        ||workspace!==path.join(worktreeGroup(parentWorkspace),s.assignmentId)))
+      fail('EXECUTOR_OWNER_UNCONFIRMED','Принадлежность исполнителя не подтверждена. Очистка запрещена.');
+    const expected={workspace,projectId,parentWorkspace,parentProjectId,
+      sessionIds:child.sessions.map(s=>s.sessionId)};
+    await this.guard(parentWorkspace);
+    await this.guard(workspace);
+    if(this.isPending(workspace)||this.isPending(parentWorkspace))
+      fail('DELETE_PENDING','Сначала завершите подтверждённое удаление родителя или исполнителя.');
+    // A parent's related[] journal claims the child even if its own job does not.
+    for(const name of await fs.readdir(this.journalDir).catch(e=>{if(e.code==='ENOENT')return [];throw e;})){
+      if(!name.endsWith('.json'))continue;
+      let job;
+      try {job=JSON.parse(await fs.readFile(path.join(this.journalDir,name),'utf8'));}
+      catch {fail('DELETE_PENDING','Журнал удаления не читается. Сначала восстановите его.');}
+      if(!validJournal(job,name))fail('DELETE_PENDING','Есть неподтверждённый журнал удаления. Проверьте восстановление.');
+      if(job.workspace===workspace||job.workspace===parentWorkspace
+        ||job.related.some(item=>item.workspace===workspace))
+        fail('DELETE_PENDING','Исполнитель указан в незавершённом журнале удаления.');
+    }
+    const volume=await this.verifyAbsent(parentWorkspace,null);
+    await this.verifyAbsent(workspace,volume,parentWorkspace);
+    return expected;
+  }
+  async clearOrphan(input,{checkBusy=async()=>{},cleanup=async()=>{},purgeState=this.purgeState}={}) {
+    const expected=await this.inspectOrphan(input);
+    await checkBusy(expected);
+    // Recheck after potentially asynchronous command/activity checks and immediately
+    // before removing any application-owned metadata; never remove a disk folder.
+    const current=await this.inspectOrphan(input);
+    if(JSON.stringify(current)!==JSON.stringify(expected))fail('EXECUTOR_RECORD_CHANGED','Запись исполнителя изменилась.');
+    const identities=[{workspace:expected.workspace,projectId:expected.projectId,sessionIds:expected.sessionIds}];
+    await cleanup({...expected,related:[]});
+    await purgeState(path.dirname(this.store.file),identities);
+    await this.purgeCopies(expected.workspace,expected.projectId);
+    await this.store.removeTemporaries();
+    const final=await this.inspectOrphan(input);
+    if(JSON.stringify(final)!==JSON.stringify(expected))fail('EXECUTOR_RECORD_CHANGED','Условия очистки изменились.');
+    await checkBusy(expected);
+    await this.store.forgetOrphanExecutor(expected);
+    return expected;
   }
   async finish(job) {
     const record = this.store.project(job.workspace);

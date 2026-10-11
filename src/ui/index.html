@@ -311,7 +311,11 @@ SOFTWARE.
           <p id="connection-detail" class="description"></p><p id="session-detail" class="description"></p>
           <button id="open-startup" class="secondary" hidden>Начальная настройка</button>
         </section>
-        <section id="executor-recovery" class="settings-section" aria-label="Восстановление исполнителей" hidden></section>
+        <section id="executor-recovery" class="settings-section" aria-label="Восстановление исполнителей" aria-live="polite" hidden>
+          <h3>Восстановление исполнителей</h3>
+          <p class="settings-help">Если папки родителя и исполнителя уже удалены, можно убрать конкретную устаревшую запись после подтверждения. Облачные чаты ChatGPT сохраняются.</p>
+          <div id="executor-recovery-items"></div>
+        </section>
         <section class="settings-section" aria-labelledby="parallel-settings-title">
           <h3 id="parallel-settings-title">Параллельное выполнение</h3>
           <label style="display:flex;align-items:center;gap:8px"><input id="parallel-allowed" type="checkbox" style="width:auto;margin:0">Разрешить параллельное выполнение</label>

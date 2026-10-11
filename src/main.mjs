@@ -467,7 +467,8 @@ function snapshot() {
     sessions: activeSessionsNewestFirst(sessions).map(({ sessionId, experience, chatUrl, title, createdAt }) => ({ sessionId, experience, chatUrl, title, createdAt })),
   })),
     executorRecovery:projects.filter(p=>p.parentWorkspace&&!projects.some(parent=>parent.workspace===p.parentWorkspace&&parent.projectId===p.parentProjectId))
-      .map(p=>({workspace:p.workspace,name:p.displayName||p.name,message:'Связь с родителем не подтверждена. Файлы и чаты сохранены.'})),
+      .map(p=>({workspace:p.workspace,projectId:p.projectId,name:p.displayName||p.name,
+        message:'Связь с родителем не подтверждена. Для отсутствующих папок можно убрать только локальную запись. Облачные чаты ChatGPT сохраняются.'})),
     archives: projectedArchives(), settings: settingsState, doctor: doctorState, parallelExecution: { ...parallelExecution },
     execution: {...execution.view(saved?.parentWorkspace??saved?.workspace),commands:(execution.view(saved?.parentWorkspace??saved?.workspace).commands??[])
       .map(c=>({...c,projectId:store.project(c.workspace)?.projectId}))},
@@ -1191,6 +1192,38 @@ function registerIpc() {
     const next = validateParallelSettings(input ?? null);
     await saveSettings({ parallelExecution: next });
     parallelExecution = next;
+  });
+  registerAction('pilot:clear-orphan-executor', async input => {
+    if (!settingsState) throw new Error('Откройте Настройки для восстановления записи исполнителя.');
+    const expected=await deletion.inspectOrphan(input);
+    const choice=await dialog.showMessageBox({
+      type:'warning',buttons:['Отмена','Убрать запись'],defaultId:0,cancelId:0,noLink:true,
+      title:'Восстановление исполнителя',
+      message:'Убрать локальную запись исполнителя «'+(store.project(expected.workspace)?.displayName||store.project(expected.workspace)?.name||expected.workspace)+'»?',
+      detail:'Путь: '+expected.workspace+'\nБудет удалена только локальная запись и относящиеся к ней настройки и диагностика. Облачные чаты ChatGPT сохраняются. Файлы на диске не удаляются.',
+    });
+    if(choice.response!==1)return;
+    if(!settingsState)throw Object.assign(new Error('Настройки закрыты. Повторите подтверждение.'),{code:'EXECUTOR_RECORD_CHANGED'});
+    const checkBusy=async target=>{
+      const workspaces=[target.workspace,target.parentWorkspace];
+      if([...liveSessions.records.values()].some(record=>workspaces.includes(record.identity?.workspace)))
+        throw Object.assign(new Error('Исполнитель или родитель ещё открыт в ChatGPT. Завершите работу.'),{code:'DELETE_PROJECT_BUSY'});
+      for(const workspace of workspaces){
+        const activity=await readCommandActivity(workspace);
+        if(activity.deletionBlocked)throw Object.assign(new Error('Исход команды не подтверждён. Очистка запрещена.'),{code:'DELETE_PROJECT_BUSY'});
+      }
+      const ledgers=Object.values(parallelExecutionBook);
+      if(ledgers.some(ledger=>Object.values(ledger?.assignments??{}).some(entry=>entry.worktree===target.workspace
+        && entry.phase!=='integrated'&&entry.integration!=='done')))
+        throw Object.assign(new Error('Назначение исполнителя ещё активно или имеет UNKNOWN-состояние.'),{code:'DELETE_PROJECT_BUSY'});
+      if([...execution.states.values()].some(state=>(state.assignments??[]).some(entry=>
+        entry.worktree===target.workspace&&entry.status!=='INTEGRATED')))
+        throw Object.assign(new Error('Исполнение не завершено. Проверьте состояние назначения.'),{code:'DELETE_PROJECT_BUSY'});
+    };
+    await deletion.clearOrphan(input,{checkBusy,cleanup:cleanupDeletedProject,
+      purgeState:(dir,identities)=>{
+        settingsSaveTail=queueProjectStatePurge(settingsSaveTail,dir,identities);return settingsSaveTail;
+      }});
   });
   registerAction('pilot:reconnect', () => conversationRecovery.requestRetry());
   registerAction('pilot:startup', action => startupAction(action), { navigation: true });

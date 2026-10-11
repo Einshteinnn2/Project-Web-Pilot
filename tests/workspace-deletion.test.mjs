@@ -596,3 +596,121 @@ test('a traversal assignment cannot authorize removal outside its worktree group
   await store.setArchived(a,true);await assert.rejects(service.preview(a),{code:'DELETE_WORKTREE_CHANGED'});
   assert.equal(await fs.readFile(path.join(victim,'keep'),'utf8'),'safe');assert.ok(await fs.stat(a));
 });
+
+test('confirmed orphan removal only clears its exact local record, backup, settings and diagnostics',async t=>{
+  const {root,store,service,project}=await fixture(t);
+  const parent=await project('Missing parent'),neighbour=await project('Neighbour');
+  const child=await boundChild(store,parent,'orphan-safe');
+  const view=store.project(child),parentId=store.project(parent).projectId;
+  const identity={workspace:child,projectId:view.projectId};
+  const keep=store.project(neighbour).sessionId;
+  const dataDir=path.dirname(store.file);
+  const state=store.snapshot();
+  await fs.writeFile(store.file+'.v2-backup',JSON.stringify(state));
+  const settings={projectAutoPlan:{[child]:{enabled:true},[neighbour]:{enabled:true}},
+    reviewCheckpoint:{entries:[{sessionId:view.sessionId},{sessionId:keep}]},
+    automationCheckpoint:{entries:[{sessionId:view.sessionId},{sessionId:keep}]}};
+  await fs.writeFile(path.join(dataDir,'settings.json'),JSON.stringify(settings));
+  await fs.mkdir(path.join(dataDir,'diagnostics'));
+  await fs.writeFile(path.join(dataDir,'diagnostics','chromium-events.jsonl'),
+    [{sessionId:view.sessionId},{sessionId:keep}].map(JSON.stringify).join('\n')+'\n');
+  await fs.writeFile(path.join(dataDir,'diagnostics.jsonl'),
+    [child,neighbour].map(workspace=>JSON.stringify({workspace})).join('\n')+'\n');
+  store.data.projects=store.data.projects.filter(p=>p.workspace!==parent);
+  await store.save();
+  await fs.rm(child,{recursive:true});await fs.rmdir(path.dirname(child));await fs.rm(parent,{recursive:true});
+  const restartedStore=new WorkspaceSessions(store.file);await restartedStore.load();
+  assert.equal(restartedStore.project(child).ownershipState,'recovery');
+  const restarted=new WorkspaceDeletion({store:restartedStore,journalDir:service.journalDir});
+  assert.deepEqual((await restarted.inspectOrphan(identity)).sessionIds,[view.sessionId]);
+  let checks=0;
+  await restarted.clearOrphan(identity,{checkBusy:async()=>{checks++;}});
+  assert.ok(checks>=2,'busy status is checked again before committing');
+  assert.equal(restartedStore.project(child),null);
+  assert.ok(restartedStore.project(neighbour));assert.equal(restartedStore.project(neighbour).sessionId,keep);
+  assert.equal(restartedStore.project(parent),null);
+  assert.deepEqual(JSON.parse(await fs.readFile(store.file+'.v2-backup','utf8')).projects.map(p=>p.workspace),[neighbour,parent]);
+  const cleaned=JSON.parse(await fs.readFile(path.join(dataDir,'settings.json')));
+  assert.deepEqual(Object.keys(cleaned.projectAutoPlan),[neighbour]);
+  assert.deepEqual(cleaned.reviewCheckpoint.entries,[{sessionId:keep}]);
+  assert.deepEqual(cleaned.automationCheckpoint.entries,[{sessionId:keep}]);
+  assert.deepEqual(JSON.parse((await fs.readFile(path.join(dataDir,'diagnostics','chromium-events.jsonl'),'utf8')).trim()),{sessionId:keep});
+  assert.deepEqual(JSON.parse((await fs.readFile(path.join(dataDir,'diagnostics.jsonl'),'utf8')).trim()),{workspace:neighbour});
+  await assert.rejects(restarted.clearOrphan(identity),{code:'EXECUTOR_RECORD_CHANGED'});
+  assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
+  assert.ok(store.file.startsWith(root+path.sep));
+  assert.equal(parentId,'Missing parent');
+});
+
+test('orphan removal refuses parent/child folders, swapped IDs, pending related journals and busy commands',async t=>{
+  for(const scenario of ['child-present','parent-present','wrong-id','parent-record','related-journal','own-journal','busy','missing-container','no-ownership']){
+    await t.test(scenario,async sub=>{
+      const {store,service,project}=await fixture(sub);
+      const parent=await project('Parent'),child=await boundChild(store,parent,'orphan-check');
+      const view=store.project(child),identity={workspace:child,projectId:view.projectId};
+      const parentId=store.project(parent).projectId;
+      const interrupted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+      if(scenario==='related-journal'||scenario==='own-journal'){
+        await store.setArchived(parent,true);await store.setArchived(child,true);
+        interrupted.finish=async()=>{throw Error('interrupted');};
+        const target=scenario==='related-journal'?parent:child;
+        const preview=await interrupted.preview(target);
+        await assert.rejects(interrupted.apply(preview.token,preview.name),/interrupted/);
+      }
+      if(scenario!=='parent-record')store.data.projects=store.data.projects.filter(p=>p.workspace!==parent);
+      if(scenario==='no-ownership')store.data.projects.find(p=>p.workspace===child).parentProjectId='not-the-parent';
+      await store.save();
+      if(scenario!=='child-present')await fs.rm(child,{recursive:true});
+      if(scenario==='missing-container'&&scenario!=='child-present')await fs.rm(path.dirname(path.dirname(child)),{recursive:true});
+      if(!['parent-present','parent-record'].includes(scenario))await fs.rm(parent,{recursive:true});
+      const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+      const busy=async()=>{throw new WorkspaceError('DELETE_PROJECT_BUSY','UNKNOWN command');};
+      const error={
+        'child-present':'DELETE_PATH_CHANGED','parent-present':'DELETE_PATH_CHANGED','wrong-id':'EXECUTOR_RECORD_CHANGED',
+        'parent-record':'EXECUTOR_OWNER_UNCONFIRMED','related-journal':'DELETE_PENDING','own-journal':'DELETE_PENDING',
+        busy:'DELETE_PROJECT_BUSY','missing-container':'DELETE_SOURCE_UNAVAILABLE','no-ownership':'EXECUTOR_OWNER_UNCONFIRMED'
+      }[scenario];
+      await assert.rejects(restarted.clearOrphan(scenario==='wrong-id'?{...identity,projectId:'foreign'}:identity,
+        scenario==='busy'?{checkBusy:busy}:{}),{code:error});
+      assert.ok(store.project(child),'refusal must preserve the original local chat');
+      assert.equal(store.project(child).sessionId,view.sessionId);
+      if(scenario==='child-present')assert.ok(await fs.stat(child));
+      if(scenario==='parent-present')assert.ok(await fs.stat(parent));
+      if(scenario==='related-journal'||scenario==='own-journal')assert.equal((await fs.readdir(service.journalDir)).length,1);
+      assert.ok(parentId);
+    });
+  }
+});
+
+test('orphan removal revalidates changed directories and identity after asynchronous busy check',async t=>{
+  const {store,service,project}=await fixture(t);
+  const parent=await project('Parent'),child=await boundChild(store,parent,'orphan-race');
+  const identity={workspace:child,projectId:store.project(child).projectId};
+  store.data.projects=store.data.projects.filter(p=>p.workspace!==parent);
+  await store.save();await fs.rm(child,{recursive:true});await fs.rm(parent,{recursive:true});
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  await assert.rejects(restarted.clearOrphan(identity,{checkBusy:async()=>{await fs.mkdir(child);}}),
+    {code:'DELETE_PATH_CHANGED'});
+  assert.ok(store.project(child));await fs.rm(child,{recursive:true});
+  await assert.rejects(restarted.clearOrphan(identity,{checkBusy:async()=>{
+    store.data.projects.find(p=>p.workspace===child).projectId='replacement';
+    await store.save();
+  }}),{code:'EXECUTOR_RECORD_CHANGED'});
+  assert.ok(store.project(child));
+});
+
+test('inaccessible recovery anchor refuses manual orphan cleanup without changing local records',async t=>{
+  const {store,service,project}=await fixture(t);
+  const parent=await project('Parent'),child=await boundChild(store,parent,'orphan-unavailable');
+  const identity={workspace:child,projectId:store.project(child).projectId};
+  store.data.projects=store.data.projects.filter(p=>p.workspace!==parent);await store.save();
+  await fs.rm(child,{recursive:true});await fs.rm(parent,{recursive:true});
+  const unavailable=path.dirname(parent),original=fs.lstat;
+  fs.lstat=async(file,...args)=>file===unavailable
+    ?Promise.reject(Object.assign(new Error('disk unavailable'),{code:'EIO'})):original(file,...args);
+  try{
+    const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+    await assert.rejects(restarted.clearOrphan(identity),{code:'EIO'});
+  }finally{fs.lstat=original;}
+  assert.ok(store.project(child));
+});

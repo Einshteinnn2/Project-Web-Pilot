@@ -102,8 +102,15 @@ export function settingsPanelView(action) {
     }
     const settings = state.settings;
     const recovery=$('executor-recovery');recovery.hidden=!(state.executorRecovery?.length);
-    recovery.replaceChildren(...(state.executorRecovery??[]).map(item=>{
-      const line=document.createElement('p');line.className='description';line.textContent=item.name+' · '+item.workspace+' — '+item.message;return line;
+    $('executor-recovery-items').replaceChildren(...(state.executorRecovery??[]).map(item=>{
+      const line=document.createElement('div');line.className='executor-recovery-entry';
+      const description=document.createElement('p');description.className='description';
+      description.textContent=item.name+' · '+item.workspace+' — '+item.message;
+      const remove=document.createElement('button');remove.type='button';remove.className='secondary';
+      remove.textContent='Убрать запись';remove.disabled=pending||!state.settings;
+      remove.setAttribute('aria-label','Убрать локальную запись исполнителя '+item.name);
+      remove.addEventListener('click',()=>action('clearOrphanExecutor',{workspace:item.workspace,projectId:item.projectId}));
+      line.append(description,remove);return line;
     }));
     $('settings-panel').hidden = !settings; $('active-projects').hidden = !!settings;
     $('open-settings').setAttribute('aria-pressed', String(!!settings));

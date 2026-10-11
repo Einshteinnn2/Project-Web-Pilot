@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1743,
+  "plan_revision": 1745,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -204,8 +204,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T004",
@@ -241,7 +241,19 @@
         "Отдельный pending-журнал родителя, в котором исполнитель указан в related[], запрещает ручную очистку; отсутствующий том/корень группы worktree не считается удалённой папкой до проверки доступного опорного каталога и тома."
       ],
       "expected_commit_message": "feat: безопасно убирать потерянную запись исполнителя",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "src/main.mjs",
+        "src/preload.cjs",
+        "src/ui/index.html",
+        "src/ui/settings-panel.mjs",
+        "src/workspace-deletion.mjs",
+        "src/workspace-session.mjs",
+        "tests/settings-parallel-execution.test.mjs",
+        "tests/sidebar.test.mjs",
+        "tests/workspace-deletion.test.mjs",
+        "tests/workspace-session.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -469,7 +481,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1743
+Revision: 1745
 
 ## Цель
 
@@ -506,8 +518,8 @@ Revision: 1743
   - Файлы: src/workspace-deletion.mjs, src/workspace-session.mjs, src/project-state-cleanup.mjs, tests/workspace-deletion.test.mjs, tests/workspace-session.test.mjs, tests/project-state-cleanup.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T002
-- [TODO] T004: Добавить адресную очистку потерянной записи в Настройках — Ожидает
-  - Git Commit: [PENDING] feat: безопасно убирать потерянную запись исполнителя
+- [DONE] T004: Добавить адресную очистку потерянной записи в Настройках — Завершено
+  - Git Commit: [DONE] feat: безопасно убирать потерянную запись исполнителя
   - Reference: archive-deletion-recovery-20261011 / T004 / implementation
   - Файлы: src/workspace-session.mjs, src/workspace-deletion.mjs, src/main.mjs, src/preload.cjs, src/ui/settings-panel.mjs, src/ui/index.html, tests/workspace-session.test.mjs, tests/workspace-deletion.test.mjs, tests/settings-parallel-execution.test.mjs, tests/sidebar.test.mjs
   - Параллельность: исключительное выполнение

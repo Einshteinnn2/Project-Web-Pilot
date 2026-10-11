@@ -28,6 +28,16 @@ test('project picker searches, marks current/background work, keeps one parent a
   f.emit(base);assert.equal(f.document.querySelector('.project').dataset.workspace,'/demo');
 });
 
+test('sidebar settings reserve an accessible recovery block separate from project/archive lists',async t=>{
+  const f=await fixture(t);
+  const section=f.document.getElementById('executor-recovery');
+  assert.ok(section.closest('#settings-panel'));
+  assert.equal(section.getAttribute('aria-live'),'polite');
+  assert.match(section.textContent,/Облачные чаты ChatGPT сохраняются/);
+  assert.ok(f.document.getElementById('executor-recovery-items'));
+  assert.ok(!section.closest('#active-projects'));
+});
+
 test('plan rows separate identity, planned mode and current status, including final handoff',async t=>{
   const f=await fixture(t),base=f.state;
   f.emit({...base,selected:{...base.selected,scopeId:'scope',planExecution:{execution_strategy:'parallel'}},

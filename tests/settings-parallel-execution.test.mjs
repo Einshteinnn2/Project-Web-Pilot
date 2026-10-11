@@ -54,6 +54,30 @@ test('real settings controls hide the limit when OFF, save valid values and expl
   assert.deepEqual(calls.pop(),['setParallelExecution',{parallel_allowed:false,max_workers:4}]);
 });
 
+test('recovery settings expose exact executor action, keep cloud-chat warning and respect pending state',async t=>{
+  const dom=new JSDOM(await fs.readFile(new URL('../src/ui/index.html',import.meta.url),'utf8'));
+  const previous=globalThis.document;globalThis.document=dom.window.document;
+  t.after(()=>{globalThis.document=previous;dom.window.close();});
+  const calls=[],view=settingsPanelView((...args)=>calls.push(args));
+  const $=id=>dom.window.document.getElementById(id);
+  const record={workspace:'/tmp/.web-pilot-worktrees/group/worker-one',projectId:'exact-id',
+    name:'Исполнитель один',message:'Связь с родителем не подтверждена. Облачные чаты ChatGPT сохраняются.'};
+  const base={projects:[],settings:{workspace:null},executorRecovery:[record],platform:'linux',theme:'light',hideToolCalls:false};
+  view.render(base,false);
+  assert.equal($('executor-recovery').hidden,false);
+  assert.match($('executor-recovery').textContent,/Восстановление исполнителей/);
+  assert.match($('executor-recovery').textContent,/Облачные чаты ChatGPT сохраняются/);
+  const button=$('executor-recovery-items').querySelector('button');
+  assert.equal(button.textContent,'Убрать запись');
+  button.click();
+  assert.deepEqual(calls,[['clearOrphanExecutor',{workspace:record.workspace,projectId:record.projectId}]]);
+  view.render(base,true);
+  assert.equal($('executor-recovery-items').querySelector('button').disabled,true);
+  view.render({...base,executorRecovery:[]},false);
+  assert.equal($('executor-recovery').hidden,true);
+  assert.equal($('executor-recovery-items').children.length,0);
+});
+
 test('startup recovery metadata uses the session snapshot and never AutoPlan or current Settings', () => {
   const project={name:'Fixture',workspace:'/fixture',sessionId:'fixture-session',scopeStatus:'NONE',
     executionSnapshot:{parallel_allowed:true,max_workers:3}};
