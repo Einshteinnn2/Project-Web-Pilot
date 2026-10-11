@@ -62,6 +62,83 @@ test('a replaced child directory stops journal recovery before parent removal',a
   assert.ok(await fs.stat(a));
 });
 
+test('characterization: two confirmed journals stay pending after parent and executor folders disappear',async t=>{
+  const {root,store,service,project}=await fixture(t);
+  const parent=await project('Мастерская файлов параллельно'),neighbour=await project('Соседний');
+  const child=await boundChild(store,parent,'wp-lost-child');
+  const childSessionId=store.project(child).sessionId;
+  await store.setArchived(parent,true);
+  await store.setArchived(child,true);
+
+  // Both real preview/apply calls persist a confirmed journal before the simulated interruption.
+  service.finish=async()=>{throw Error('fixture: interruption before rename');};
+  for(const workspace of [parent,child]) {
+    const preview=await service.preview(workspace);
+    await assert.rejects(service.apply(preview.token,preview.name),/fixture: interruption/);
+  }
+  const journalNames=(await fs.readdir(service.journalDir)).sort();
+  assert.equal(journalNames.length,2);
+  const journals=await Promise.all(journalNames.map(name=>fs.readFile(path.join(service.journalDir,name),'utf8').then(JSON.parse)));
+  assert.deepEqual(new Set(journals.map(job=>job.workspace)),new Set([parent,child]));
+  assert.ok(journals.every(job=>job.stage==='confirmed'&&!job.missing&&job.identity?.ino));
+  assert.deepEqual(journals.find(job=>job.workspace===parent).related.map(item=>item.workspace),[child]);
+
+  await fs.rm(child,{recursive:true});
+  await fs.rmdir(path.dirname(child)); // The normal cleanup may remove this hashed group.
+  await fs.rm(parent,{recursive:true});
+  for(const job of journals) {
+    await assert.rejects(fs.lstat(job.workspace),{code:'ENOENT'});
+    await assert.rejects(fs.lstat(job.quarantine),{code:'ENOENT'});
+  }
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  const errors=await restarted.recover();
+  assert.equal(errors.length,2);
+  assert.deepEqual(new Set(errors.map(e=>e.workspace)),new Set([parent,child]));
+  assert.ok(errors.every(e=>e.code==='DELETE_PATH_CHANGED'));
+  assert.equal(restarted.isPending(parent),true);
+  assert.equal(restarted.isPending(child),true);
+  assert.equal(store.project(parent).archivedAt!==null,true);
+  assert.equal(store.project(child,childSessionId).sessionId,childSessionId);
+  assert.equal((await fs.readdir(service.journalDir)).length,2);
+  assert.equal(store.project(neighbour).workspace,neighbour);
+  assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
+  assert.ok(store.file.startsWith(root+path.sep),'the test store must stay inside the temporary fixture');
+  assert.deepEqual(await restarted.recover(),errors,'repeated recovery preserves the same pending journals');
+
+  // T002/T003: replace current-error assertions with the successful post-fix contract:
+  // assert.deepEqual(await restarted.recover(), []);
+  // assert.equal(store.project(parent), null);
+  // assert.equal(store.project(child), null);
+  // assert.deepEqual(await fs.readdir(service.journalDir), []);
+  // assert.deepEqual(await restarted.recover(), []);
+  // assert.ok(store.project(neighbour));
+});
+
+test('characterization: confirmed journal refuses a new directory at the deleted project path',async t=>{
+  const {root,store,service,project}=await fixture(t);
+  const parent=await project('Удаляемый'),neighbour=await project('Соседний');
+  await store.setArchived(parent,true);
+  service.finish=async()=>{throw Error('fixture: interruption before rename');};
+  const preview=await service.preview(parent);
+  await assert.rejects(service.apply(preview.token,preview.name),/fixture: interruption/);
+  const [name]=await fs.readdir(service.journalDir);
+  const journal=JSON.parse(await fs.readFile(path.join(service.journalDir,name),'utf8'));
+  assert.equal(journal.stage,'confirmed');
+  const saved=path.join(root,'original-project');
+  await fs.rename(parent,saved);
+  await fs.mkdir(parent);
+  await fs.writeFile(path.join(parent,'replacement.txt'),'new owner must survive');
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual((await restarted.recover()).map(e=>e.code),['DELETE_PATH_CHANGED']);
+  assert.equal(await fs.readFile(path.join(parent,'replacement.txt'),'utf8'),'new owner must survive');
+  assert.equal(await fs.readFile(path.join(saved,'my-file.txt'),'utf8'),'keep until confirmed');
+  assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
+  assert.ok(store.project(parent).archivedAt);
+  assert.deepEqual(await fs.readdir(service.journalDir),[name]);
+
+  // T002 must keep refusing any replacement even after introducing missing-folder recovery.
+});
+
 
 const directoryLink = (target, link) => fs.symlink(target, link, process.platform === 'win32' ? 'junction' : 'dir');
 

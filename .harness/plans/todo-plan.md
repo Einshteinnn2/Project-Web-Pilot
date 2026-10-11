@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1737,
+  "plan_revision": 1739,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -94,8 +94,8 @@
   },
   "tasks": [
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T001",
@@ -120,7 +120,11 @@
         "Проверены соседний проект, новая папка по старому пути и неизменность реального userData."
       ],
       "expected_commit_message": "test: воспроизвести зависший журнал и потерянных исполнителей",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "tests/workspace-deletion.test.mjs",
+        "tests/workspace-session.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -454,7 +458,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1737
+Revision: 1739
 
 ## Цель
 
@@ -473,8 +477,8 @@ Revision: 1737
 Выполнение: sequential; разрешено: true; лимит: 4
 Причина: Общий мутируемый реестр, жизненный цикл журнала удаления, связанные settings/diagnostics и единый Electron UI требуют последовательных изменений с регрессией между этапами; независимые исполнители создадут конкурирующие записи и избыточную координацию.
 
-- [TODO] T001: Воспроизвести оба сбоя в изолированных fixture — Ожидает
-  - Git Commit: [PENDING] test: воспроизвести зависший журнал и потерянных исполнителей
+- [DONE] T001: Воспроизвести оба сбоя в изолированных fixture — Завершено
+  - Git Commit: [DONE] test: воспроизвести зависший журнал и потерянных исполнителей
   - Reference: archive-deletion-recovery-20261011 / T001 / implementation
   - Файлы: tests/workspace-deletion.test.mjs, tests/workspace-session.test.mjs
   - Параллельность: исключительное выполнение

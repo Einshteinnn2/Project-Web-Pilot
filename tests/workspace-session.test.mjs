@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { WorkspaceSessions, readWorkspace, normalizeChatUrl, conversationExperience, conversationUrlCompatibleWithExperience, activeSessionsNewestFirst } from '../src/workspace-session.mjs';
 import { sessionExecutionMessage } from '../src/context-session.mjs';
 
@@ -26,6 +26,65 @@ test('assignment gets one inherited session without moving selection and persist
   assert.equal(restarted.project(worktree).parentProjectId,main.projectId);
   assert.equal(restarted.project(worktree).executionAutomation.autoPlanCheckpoint.version,3);
   await assert.rejects(store.ensureExecutor({...assignment,parent_task_id:'T002'},main),{code:'ASSIGNMENT_OWNER'});
+});
+
+test('characterization: five missing executor folders remain recovery records after their parent disappears',async t=>{
+  const {root,project,store}=await fixture(t);
+  const parent=await store.select(await project('PL_Мастерская_файлов','deleted-parent-id'));
+  const group=path.join(path.dirname(parent.workspace),'.web-pilot-worktrees',createHash('sha256').update(parent.workspace).digest('hex').slice(0,16));
+  const children=[];
+  for(let i=0;i<5;i++) {
+    const id='wp-lost-'+String(i+1).padStart(2,'0');
+    const worktree=path.join(group,id);
+    await fs.mkdir(path.join(worktree,'.harness/plans'),{recursive:true});
+    await fs.mkdir(path.join(worktree,'scripts'),{recursive:true});
+    await fs.copyFile(path.join(parent.workspace,'.harness/plans/todo-plan.md'),path.join(worktree,'.harness/plans/todo-plan.md'));
+    await fs.writeFile(path.join(worktree,'scripts/workflow.mjs'),'// fixture');
+    const assigned=await store.ensureExecutor({id,worktree,parent_root:parent.workspace,
+      parent_scope_id:'fixture-scope',parent_task_id:'T001',title:'Изолированный исполнитель '+i},parent);
+    const chatUrl='https://chatgpt.com/c/lost-worker-'+i+'-fixture';
+    store.data.projects.find(p=>p.workspace===worktree).sessions.find(s=>s.sessionId===assigned.sessionId).chatUrl=chatUrl;
+    await store.save();
+    children.push({workspace:worktree,projectId:assigned.projectId,sessionId:assigned.sessionId,chatUrl});
+  }
+  const neighbour=await store.select(await project('Соседний','neighbour-id'));
+  const neighbourBefore=store.project(neighbour.workspace);
+  store.data.projects=store.data.projects.filter(p=>p.workspace!==parent.workspace);
+  await store.save();
+  await fs.rm(parent.workspace,{recursive:true});
+  await fs.rm(group,{recursive:true});
+  assert.equal(store.file.startsWith(root+path.sep),true,'never use real userData as the fixture store');
+
+  const restarted=new WorkspaceSessions(store.file);
+  await restarted.load();
+  const records=restarted.snapshot().projects;
+  assert.equal(records.length,6);
+  assert.equal(records.some(p=>p.workspace===parent.workspace),false);
+  assert.equal(restarted.selected().workspace,neighbour.workspace);
+  assert.equal(restarted.landing().workspace,neighbour.workspace);
+  assert.equal(restarted.project(neighbour.workspace).sessionId,neighbourBefore.sessionId);
+  for(const expected of children) {
+    const entry=records.find(p=>p.workspace===expected.workspace);
+    assert.ok(entry,'all five original records survive load');
+    assert.equal(entry.parentWorkspace,parent.workspace);
+    assert.equal(entry.parentProjectId,parent.projectId);
+    assert.equal(entry.ownershipState,'recovery');
+    assert.equal(entry.sessions.length,1);
+    assert.equal(entry.sessions[0].sessionId,expected.sessionId);
+    assert.equal(entry.sessions[0].chatUrl,expected.chatUrl);
+    await assert.rejects(fs.lstat(expected.workspace),{code:'ENOENT'});
+    await assert.rejects(restarted.selectSession(expected.workspace,expected.sessionId),{code:'WORKFLOW_NOT_INSTALLED'});
+  }
+  const disk=JSON.parse(await fs.readFile(store.file,'utf8'));
+  assert.equal(disk.projects.length,6);
+  assert.equal(disk.projects.filter(p=>p.ownershipState==='recovery').length,5);
+
+  // T004: load() must keep these records until explicit per-executor confirmation.
+  // After confirming removal of the first child only:
+  // assert.equal(restarted.project(children[0].workspace), null);
+  // assert.equal(restarted.snapshot().projects.length, 5);
+  // assert.ok(restarted.project(children[1].workspace));
+  // assert.equal(restarted.project(neighbour.workspace).sessionId,neighbourBefore.sessionId);
 });
 
 test('execution settings are captured at creation, independent of edits, selection and restart', async t => {
