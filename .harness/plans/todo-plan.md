@@ -4,12 +4,12 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1810,
+  "plan_revision": 1812,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
   "execution_scope_status": "ACTIVE",
-  "delivery_status": "IN_PROGRESS",
+  "delivery_status": "READY_FOR_ACCEPTANCE",
   "objective": "Настраиваемая ротация Chat каждые 1–10 DONE при AutoPlan ON с безопасным Recovery и парным выпуском 0.6.114.",
   "acceptance_criteria": [
     "Chat при AutoPlan ON меняется после заданного N подтверждённых DONE и без дублей Recovery/Continue.",
@@ -587,8 +587,8 @@
       "actual_files": []
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T011",
@@ -613,7 +613,8 @@
         "Remote main, tag v0.6.114 на sourceCommit, шесть assets имена/размеры/digest. План READY_FOR_ACCEPTANCE; живая macOS/Windows проверка пользователем."
       ],
       "expected_commit_message": "release: Опубликовать и сверить GitHub Release 0.6.114",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     }
   ],
   "blocked_reason": null,
@@ -636,10 +637,10 @@
 ## Состояние
 
 Execution Scope Status: ACTIVE
-Delivery Status: IN_PROGRESS
+Delivery Status: READY_FOR_ACCEPTANCE
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1810
+Revision: 1812
 
 ## Цель
 
@@ -728,8 +729,8 @@ Revision: 1810
   - Файлы: docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T009, DOCS
-- [TODO] T011: Опубликовать и сверить GitHub Release 0.6.114 — Ожидает
-  - Git Commit: [PENDING] release: Опубликовать и сверить GitHub Release 0.6.114
+- [DONE] T011: Опубликовать и сверить GitHub Release 0.6.114 — Завершено
+  - Git Commit: [DONE] release: Опубликовать и сверить GitHub Release 0.6.114
   - Reference: chat-session-rotation-20261011 / T011 / implementation
   - Файлы: docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
