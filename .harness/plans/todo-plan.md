@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1752,
+  "plan_revision": 1754,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -387,8 +387,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T007",
@@ -414,7 +414,8 @@
         "Manifest, staging, SHA256SUMS, version/sourceCommit, macOS подпись, шесть release assets проверены; живой ChatGPT/native Windows не объявляются проверенными."
       ],
       "expected_commit_message": "build: подготовить парный выпуск исправления удаления 0.6.112",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -500,7 +501,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1752
+Revision: 1754
 
 ## Цель
 
@@ -561,8 +562,8 @@ Revision: 1752
   - Файлы: docs/architecture/OVERVIEW.md, docs/planning/archive-deletion-recovery-spec.md, README.md, docs/modules/project-archive.md, docs/modules/workspace-sessions.md, docs/modules/workspace-sidebar-ui.md, docs/modules/chromium-diagnostics.md, docs/modules/release.md
   - Параллельность: исключительное выполнение
   - Зависимости: T001, T002, T003, T004, T005, T006
-- [TODO] T007: Собрать единственный парный выпуск 0.6.112 — Ожидает
-  - Git Commit: [PENDING] build: подготовить парный выпуск исправления удаления 0.6.112
+- [DONE] T007: Собрать единственный парный выпуск 0.6.112 — Завершено
+  - Git Commit: [DONE] build: подготовить парный выпуск исправления удаления 0.6.112
   - Reference: archive-deletion-recovery-20261011 / T007 / implementation
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
