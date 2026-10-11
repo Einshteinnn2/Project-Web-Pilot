@@ -24,7 +24,7 @@
       "args": [
         "test"
       ],
-      "evidence": "Полный npm test: Node дочерних проверок при минимальном PATH; общая parallel-проекция и отдельная карточка назначения; AutoPlan correction ON/OFF/UNKNOWN/черновик/команда; регрессия проектов, Review, доставки и Kit; command lifecycle/final handoff/parent ownership/cascade/sidebar/context no-replay"
+      "evidence": "Полный npm test, включая T007/T007A: счётчик Kit DONE, AutoPlan ON/OFF, защищённый handoff Chat, Recovery, restart/UNKNOWN/Stop, Work/parallel; без живого ChatGPT."
     },
     {
       "required": false,
@@ -36,7 +36,7 @@
         "run",
         "smoke"
       ],
-      "evidence": "Electron TEST FIXTURE: 3-task conflict/correction and 5-task foundation → three independent tools → final result; eight verified integrations, one final primary handoff, real read-only HTTP server through completion, protected deletion, fresh identity on reopen. No live ChatGPT/native Windows/clean OS acceptance."
+      "evidence": "Electron TEST FIXTURE T007/T007A: Settings→IPC→Git/Kit commit→busy/idle→новый Chat→4 вложения Recovery→первый assistant→один Continue; N=1 и N=4, фоновый проект, ручной Chat ON, без двойных Send; также existing parallel, Work, deletion и recovery регрессии. Без live ChatGPT/native Windows."
     },
     {
       "required": false,
@@ -48,7 +48,7 @@
         "run",
         "check:codex-tools"
       ],
-      "evidence": "Установленный Codex 0.162.1 и openai/codex rust-v0.162.1: SHA всех трёх определений совпали с 0.162.0, формы MCP сохранены"
+      "evidence": "T008: сверка установленного Codex 0.162.1, openai/codex rust-v0.162.1 и форм MCP без изменения локального исполнителя; до DOCS и без сборки."
     },
     {
       "required": false,
@@ -60,7 +60,7 @@
         "run",
         "build"
       ],
-      "evidence": "~/Downloads/WebPilot-0.6.113: macOS arm64 и Windows x64, два ZIP + Windows-runtime + SHA256SUMS.txt + INSTALL.txt + release-manifest.json; sourceCommit, подпись и bundled Workflow Kit 1.7.2 проверены. Единственную сборку выполняет paired-release при коммите T006 после T005 и DOCS"
+      "evidence": "Единственная парная сборка 0.6.114 на sourceCommit после кода T001–T008/T007A и завершённой DOCS; T009: macOS arm64 + Windows x64, два ZIP, Windows-runtime, SHA256SUMS.txt, INSTALL.txt, release-manifest.json, подпись и bundled Workflow Kit 1.7.2. Только T009; до DOCS build запрещён."
     },
     {
       "required": false,
@@ -71,7 +71,7 @@
       "args": [
         "scripts/check-installed-release.mjs"
       ],
-      "evidence": "0.6.113, Workflow Kit 1.7.2: установка при коммите T007 из готового staging T006 без пересборки; сохранённые app identity/signature и контроль manifest"
+      "evidence": "T010: macOS 0.6.114 устанавливается исключительно из готового staging T009, без пересборки. Проверка release-manifest, sourceCommit, подписи, версии, app identity, ресурсов Workflow Kit 1.7.2."
     },
     {
       "required": false,
@@ -82,7 +82,7 @@
       "args": [
         "scripts/check-github-release.mjs"
       ],
-      "evidence": "GitHub Release v0.6.113 при коммите T008, Workflow Kit 1.7.2: remote main, tag на sourceCommit, ровно шесть assets и digest сверены с manifest без пересборки"
+      "evidence": "T011: GitHub Release v0.6.114 после DOCS, T009 и T010; origin/main, тег на sourceCommit, шесть assets по имени, размеру и sha256 digest сверены с локальным manifest; без новой сборки. READY_FOR_ACCEPTANCE до приёмки пользователя."
     },
     {
       "required": false,
@@ -128,15 +128,15 @@
     },
     {
       "id": "release-source",
-      "kind": "package",
+      "kind": "test",
       "required": false,
       "timeout_ms": 30000,
       "executable": "node",
       "args": [
         "-e",
-        "const fs=require(\"node:fs\");const p=JSON.parse(fs.readFileSync(\"package.json\"));const l=JSON.parse(fs.readFileSync(\"package-lock.json\"));const k=JSON.parse(fs.readFileSync(\"packages/workflow-kit/package.json\"));if(p.version!==\"0.6.113\"||l.version!==p.version||l.packages[\"\"].version!==p.version||k.version!==\"1.7.2\")process.exit(1);console.log(\"Release source 0.6.113 and Workflow Kit 1.7.2 coherent\");"
+        "const fs=require(\"node:fs\");const p=JSON.parse(fs.readFileSync(\"package.json\"));const l=JSON.parse(fs.readFileSync(\"package-lock.json\"));const k=JSON.parse(fs.readFileSync(\"packages/workflow-kit/package.json\"));if(p.version!==\"0.6.114\"||l.version!==p.version||l.packages[\"\"].version!==p.version||k.version!==\"1.7.2\")process.exit(1);console.log(\"Release source 0.6.114 and Workflow Kit 1.7.2 coherent\");"
       ],
-      "evidence": "Version source preflight T005: package.json / package-lock.json = 0.6.113; Workflow Kit 1.7.2, no assembly; paired-release запускается только в T006 после DOCS, установка в T007, GitHub в T008"
+      "evidence": "T008 source preflight ДО DOCS: package.json/package-lock.json root + lock root = 0.6.114; Workflow Kit = 1.7.2. Проверка типа test: не выполняет build/sign/install/publish. Поставка исключительно T009 после DOCS, установка T010, GitHub T011."
     }
   ],
   "budget": {

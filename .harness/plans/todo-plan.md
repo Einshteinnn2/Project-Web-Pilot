@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1801,
+  "plan_revision": 1803,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -61,7 +61,7 @@
     ]
   },
   "baseline_commit": "acdfda4daab7f8b5aba0be784cdf3d5190cd452f",
-  "current_task_id": null,
+  "current_task_id": "T008",
   "context_pack": {
     "documents": [
       {
@@ -431,7 +431,7 @@
       ]
     },
     {
-      "implementation_status": "TODO",
+      "implementation_status": "IN_PROGRESS",
       "commit_status": "PENDING",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
@@ -620,8 +620,8 @@
 Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
-Current Task: нет
-Revision: 1801
+Current Task: T008
+Revision: 1803
 
 ## Цель
 
@@ -686,7 +686,7 @@ Revision: 1801
   - Файлы: src/main.mjs, src/chat-session-rotation.mjs, tests/chat-session-rotation.test.mjs, tests/electron-smoke.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: нет
-- [TODO] T008: Подготовить источник выпуска 0.6.114 и проверки — Ожидает
+- [IN_PROGRESS] T008: Подготовить источник выпуска 0.6.114 и проверки — В работе
   - Git Commit: [PENDING] feat: Подготовить источник выпуска 0.6.114 и проверки
   - Reference: chat-session-rotation-20261011 / T008 / implementation
   - Файлы: package.json, package-lock.json, .harness/workflow.json, scripts/check-installed-release.mjs, scripts/check-github-release.mjs, docs/planning/chat-session-rotation-spec.md
