@@ -4,12 +4,12 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1756,
+  "plan_revision": 1758,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
   "execution_scope_status": "ACTIVE",
-  "delivery_status": "IN_PROGRESS",
+  "delivery_status": "READY_FOR_ACCEPTANCE",
   "objective": "Исправить восстановление подтверждённого удаления после исчезновения исходных каталогов и безопасно устранять потерянные записи executor-worktree без повреждения соседних проектов и пользовательских данных; выпустить 0.6.112.",
   "acceptance_criteria": [
     "Валидный confirmed-журнал при отсутствии исходного каталога и карантина заканчивается адресной очисткой метаданных, записи архива и журнала; повторение и restart идемпотентны.",
@@ -449,8 +449,8 @@
       "actual_files": []
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T009",
@@ -476,7 +476,8 @@
         "Ограничения macOS живой приёмки, native Windows и чистой установки названы; план оставлен READY_FOR_ACCEPTANCE до подтверждения пользователя."
       ],
       "expected_commit_message": "release: опубликовать и проверить 0.6.112",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     }
   ],
   "blocked_reason": null,
@@ -499,10 +500,10 @@
 ## Состояние
 
 Execution Scope Status: ACTIVE
-Delivery Status: IN_PROGRESS
+Delivery Status: READY_FOR_ACCEPTANCE
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1756
+Revision: 1758
 
 ## Цель
 
@@ -575,8 +576,8 @@ Revision: 1756
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
   - Зависимости: T007, DOCS
-- [TODO] T009: Опубликовать и сверить GitHub Release 0.6.112 — Ожидает
-  - Git Commit: [PENDING] release: опубликовать и проверить 0.6.112
+- [DONE] T009: Опубликовать и сверить GitHub Release 0.6.112 — Завершено
+  - Git Commit: [DONE] release: опубликовать и проверить 0.6.112
   - Reference: archive-deletion-recovery-20261011 / T009 / implementation
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
