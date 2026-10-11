@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1771,
+  "plan_revision": 1772,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -52,7 +52,7 @@
     ]
   },
   "baseline_commit": "a1cd02424932d4666fd43cbcd6a61a7f2d5e2a31",
-  "current_task_id": "T005",
+  "current_task_id": null,
   "context_pack": {
     "documents": [
       {
@@ -247,8 +247,8 @@
       ]
     },
     {
-      "implementation_status": "IN_PROGRESS",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T005",
@@ -274,7 +274,11 @@
         "Evidence release-source/paired-release/release-installed/github-release обновлены на 0.6.113 и точные этапы T006 (build), T007 (install), T008 (GitHub); никакая сборка или публикация здесь не запускается."
       ],
       "expected_commit_message": "chore: prepare 0.6.113 release source and checks",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "package.json",
+        "package-lock.json"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -419,8 +423,8 @@
 Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
-Current Task: T005
-Revision: 1771
+Current Task: нет
+Revision: 1772
 
 ## Цель
 
@@ -463,8 +467,8 @@ Revision: 1771
   - Файлы: tests/electron-smoke.mjs, tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, tests/parallel-finalization.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T003
-- [IN_PROGRESS] T005: Зафиксировать версию 0.6.113 и проверки поставки — В работе
-  - Git Commit: [PENDING] chore: prepare 0.6.113 release source and checks
+- [DONE] T005: Зафиксировать версию 0.6.113 и проверки поставки — Завершено
+  - Git Commit: [DONE] chore: prepare 0.6.113 release source and checks
   - Reference: autoplan-lifecycle-recovery-20261011 / T005 / implementation
   - Файлы: package.json, package-lock.json, .harness/workflow.json
   - Параллельность: исключительное выполнение
