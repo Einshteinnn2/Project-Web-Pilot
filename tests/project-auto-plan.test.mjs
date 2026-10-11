@@ -263,6 +263,27 @@ test('T003: trustworthy NONE after an archived scope can arm a fresh first plan'
  auth.sync('/fixture','old-scope',{confirmed:true,planRevision:100});
  assert.equal(auth.state('/fixture').scopeId,'new-scope');
 });
+test('T004: repeated recovered ON is idempotent, and a foreign project at the same path starts OFF',()=>{
+ const identity={value:'project-one'};
+ const auth=new ProjectAutoPlan({identity:()=>identity.value,ownsSession:()=>true});
+ auth.set('/fixture','partial',true,'old');
+ auth.sync('/fixture','partial',{confirmed:true,planRevision:7,originSessionId:'old',executionStrategy:'sequential'});
+ auth.saveCheckpoint('/fixture','partial','old',{autoPlanCheckpoint:{entries:[{status:'sending'}]}});
+ auth.set('/fixture','partial',false,'old');
+ auth.setWhileUnconfirmed('/fixture',true,'recovered');
+ auth.setWhileUnconfirmed('/fixture',true,'recovered');
+ auth.sync('/fixture',null,{confirmed:false});
+ auth.sync('/fixture','partial',{confirmed:true,planRevision:8,originSessionId:'old'});
+ assert.equal(auth.state('/fixture').sessionId,'recovered');
+ assert.equal(auth.enabled('/fixture','partial'),true);
+ assert.equal(auth.checkpoint('/fixture','partial','old').autoPlanCheckpoint.entries[0].status,'sending');
+ assert.deepEqual(auth.checkpoint('/fixture','partial','recovered'),{});
+ const copy=structuredClone(auth.snapshot());
+ identity.value='different-project';
+ const foreign=new ProjectAutoPlan({saved:copy,identity:()=>identity.value,ownsSession:()=>true});
+ assert.equal(foreign.enabled('/fixture','partial'),false);
+ assert.notEqual(foreign.state('/fixture')?.sessionId,'recovered');
+});
 
 test('A01/A02/A04/A06: two main monitors in one project send only from plan origin despite stale/error, then OFF',async t=>{
  const {configureProjectAutoPlan}=await import('../src/project-session-auto-plan.mjs');

@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1767,
+  "plan_revision": 1769,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -207,8 +207,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T004",
@@ -238,7 +238,13 @@
         "Полный Node suite и Electron smoke зелёные; ограничения отсутствия живого ChatGPT/native Windows/чистой ОС явно зафиксированы."
       ],
       "expected_commit_message": "test: cover AutoPlan lifecycle and recovered session end to end",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "tests/auto-plan.test.mjs",
+        "tests/electron-smoke.mjs",
+        "tests/parallel-finalization.test.mjs",
+        "tests/project-auto-plan.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -414,7 +420,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1767
+Revision: 1769
 
 ## Цель
 
@@ -451,8 +457,8 @@ Revision: 1767
   - Файлы: src/project-session-auto-plan.mjs, src/auto-plan.mjs, src/main.mjs, src/session-runtime.mjs, src/plan-monitor.mjs, tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, src/project-auto-plan.mjs, tests/electron-smoke.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T002
-- [TODO] T004: Завершить сквозную матрицу AutoPlan и регрессию смежных сценариев — Ожидает
-  - Git Commit: [PENDING] test: cover AutoPlan lifecycle and recovered session end to end
+- [DONE] T004: Завершить сквозную матрицу AutoPlan и регрессию смежных сценариев — Завершено
+  - Git Commit: [DONE] test: cover AutoPlan lifecycle and recovered session end to end
   - Reference: autoplan-lifecycle-recovery-20261011 / T004 / implementation
   - Файлы: tests/electron-smoke.mjs, tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, tests/parallel-finalization.test.mjs
   - Параллельность: исключительное выполнение

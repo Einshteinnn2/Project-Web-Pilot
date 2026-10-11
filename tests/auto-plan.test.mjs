@@ -128,6 +128,33 @@ test('an enabled idle client wakes when its first plan appears', async () => {
   f.setScope('scope'); await f.flow.planChanged(); await f.drain();
   assert.deepEqual(f.sends, ['Продолжай']);
 });
+test('T004: every technical WAIT retains ON, a visible reason, and wakes without a second start',async()=>{
+  for(const [condition,reason] of [
+    ['no-plan','PLAN_UNAVAILABLE'],['hydration','HISTORY_NOT_READY'],
+    ['page','PAGE_NOT_READY'],['draft','DRAFT_PRESENT']]){
+    const f=fixture({scopeId:condition==='no-plan'?null:'scope'});
+    if(condition==='hydration')f.observe({lastMessageRole:null});
+    if(condition==='page')f.observe({editorAvailable:false});
+    if(condition==='draft')f.observe({draftPresent:true});
+    await f.flow.start();
+    const view=f.flow.view();
+    assert.equal(view.enabled,true,condition);
+    assert.equal(view.phase,'waiting',condition);
+    assert.equal(view.reason,reason,condition);
+    assert.ok(view.message.trim(),condition);
+    assert.deepEqual(f.sends,[],condition);
+    if(condition==='no-plan'){
+      f.plan.scopeId='scope';f.plan.scopeStatus='ACTIVE';
+      f.plan.planView.tasks=[{id:'T001',status:'pending'}];f.setScope('scope');
+      await f.flow.planChanged();
+    }else f.observe(condition==='hydration'?{lastMessageRole:'assistant'}
+      :condition==='page'?{editorAvailable:true}:{draftPresent:false});
+    await f.drain();
+    assert.deepEqual(f.sends,['Продолжай'],condition);
+    await f.flow.planChanged();await f.drain();
+    assert.equal(f.sends.length,1,condition+' has no duplicate on repeated events');
+  }
+});
 test('T003: one ON before recovered history is ready wakes through busy, hydration and draft without a second toggle',async()=>{
   const f=fixture({turnId:''});
   f.observe({lastMessageRole:null,editorAvailable:false});

@@ -1352,6 +1352,19 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     autoPlan.observe(pageState.current); await autoPlan.reconcile();
     assert.equal(await countMessages(), before);
   };
+  const assertAutoPlanVisible = async ({waiting = false, reason = null} = {}) => {
+    await waitFor(async () => {
+      const ui = await sidebar.executeJavaScript(`(() => {
+        const button=document.getElementById('auto-plan-toggle');
+        const message=document.getElementById('auto-plan-message');
+        return {pressed:button.getAttribute('aria-pressed'),hidden:message.hidden,
+          reason:message.dataset.reason,text:message.textContent};
+      })()`);
+      return ui.pressed === 'true' && !ui.hidden && ui.text.trim().length > 0
+        && (!waiting || (autoPlan.view().phase === 'waiting' && ui.reason.length > 0))
+        && (!reason || ui.reason === reason);
+    }, `visible AutoPlan ${reason ?? (waiting ? 'WAIT' : 'ON')}`, snapshot);
+  };
   const trustedClick = async selector => {
     browser.focus();
     const point = await browser.executeJavaScript("(()=>{const b=document.querySelector(" + JSON.stringify(selector) + ");b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()");
@@ -1383,7 +1396,11 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   };
   const prePlanChat = store.snapshot().projects.find(p => p.workspace === workspace).sessions
     .find(session => !session.archivedAt && session.chatUrl);
-  await sidebar.executeJavaScript('window.webPilot.setAutoPlan(true)');
+  await waitFor(() => sidebar.executeJavaScript("!document.getElementById('auto-plan-toggle').disabled"),
+    'pre-plan user toggle ready', snapshot);
+  await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').click()");
+  await waitFor(() => savedAutoState().then(state => state.autoPlanEnabled),
+    'one sidebar click saved through protected IPC', snapshot);
   assert.equal((await savedAutoState()).autoPlanEnabled, true, 'explicit pre-plan authorization persists');
   await characterizeAutoPlan('sidebar-ON-before-plan');
   await sidebar.executeJavaScript(`window.webPilot.newSession(${JSON.stringify(workspace)}, "chat")`);
@@ -1399,9 +1416,10 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   assert.equal(beforePlan.awaitingPlan,true);
   assert.equal(beforePlan.controllerON,true);
   assert.equal(beforePlan.sidebarON,true);
-  await waitFor(()=>sidebar.executeJavaScript("document.getElementById('auto-plan-message').dataset.reason.length>0"),
-    'pre-plan wait is visible rather than OFF',snapshot);
-  await beginAnswer(); await noExtraSend(1);
+  await assertAutoPlanVisible({waiting:true});
+  await beginAnswer();
+  await assertAutoPlanVisible(); // busy is RUNNING, not OFF or a fabricated WAIT reason
+  await noExtraSend(1);
   const legacyChats = [prePlanChat, autoScopeOwner]
     .map(session => store.project(workspace,session.sessionId))
     .map(session => ({ sessionId: session.sessionId, chatUrl: session.chatUrl, title: session.title, titleSource: session.titleSource }));
@@ -1443,6 +1461,7 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   assert.equal(afterPublication.persistedScope, 'fixture-current-plan');
   assert.equal(afterPublication.recipient, scopeOwner.sessionId);
   assert.equal(afterPublication.publishedOrigin, scopeOwner.sessionId);
+  await assertAutoPlanVisible();
   await endAnswer('Создан текущий план, обычный отчёт без специальной итоговой строки.');
   await expectContinue(1, 'first ON before plan continues on first assistant idle');
   const idleAfterFirstON = await characterizeAutoPlan('planning-reply-idle-with-only-first-ON');
@@ -1521,14 +1540,28 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     'manual rename updates local and native titles together', snapshot);
   assert.equal(store.selected().titleSource, 'manual');
 
-  // T003: partially DONE, OFF, recovered Work already idle. The first ON is
-  // deliberately concurrent with a Review-unconfirmed plan inspection; when
-  // publication becomes trusted, its original click must wake exactly once.
+  // T003: partially DONE, OFF, recovered Work already idle. One sidebar click
+  // must send immediately to the new main, not wait for a second OFF -> ON.
   const recoveryBefore = await countMessages();
   await beginAnswer();
   await endAnswer('Recovery прочитан. Готов продолжать существующий план.');
   await waitFor(() => !pageState.current?.state.busy && pageState.current?.state.lastMessageRole === 'assistant',
     'recovered Work has an idle assistant answer', snapshot);
+  await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').click()");
+  await expectContinue(recoveryBefore,'recovered Work idle receives one immediate continuation');
+  const immediateRecovery=await characterizeAutoPlan('recovered-Work-immediate-first-ON');
+  assert.equal(immediateRecovery.recipient,currentWork.sessionId);
+  assert.equal(immediateRecovery.persistedON,true);
+  await noExtraSend(recoveryBefore+1);
+  await sidebar.executeJavaScript('window.webPilot.setAutoPlan(false)');
+
+  // The independent Review race keeps that same permission on WAIT until a
+  // trusted publication, without changing the recipient or issuing a Send.
+  await beginAnswer();
+  await endAnswer('Восстановленная сессия ждёт подтверждения Review.');
+  await waitFor(() => !pageState.current?.state.busy && pageState.current?.state.lastMessageRole === 'assistant',
+    'second recovered Work answer is idle', snapshot);
+  const blockedRecoveryBefore=await countMessages();
   const beforeRecoveryReview=await fs.readFile(reviewStateFile).catch(error=>error.code==='ENOENT'?null:Promise.reject(error));
   await fs.mkdir(path.dirname(reviewStateFile),{recursive:true});
   await fs.writeFile(reviewStateFile,JSON.stringify({version:1,enabled:true,stage:'RUNNING',generation:10,
@@ -1541,14 +1574,13 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   assert.equal(recoveredOnce.recipient,currentWork.sessionId,'new recovered Work owns sequential continuation');
   assert.equal(recoveredOnce.persistedON,true,'unconfirmed ON persists');
   assert.equal(recoveredOnce.controllerON,true,'controller remains ON while the plan is unconfirmed');
-  await noExtraSend(recoveryBefore);
-  assert.equal(await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').getAttribute('aria-pressed')"),
-    'true','blocked wait does not disguise ON as OFF');
+  await noExtraSend(blockedRecoveryBefore);
+  await assertAutoPlanVisible({waiting:true});
   if(beforeRecoveryReview)await fs.writeFile(reviewStateFile,beforeRecoveryReview);
   else await fs.writeFile(reviewStateFile,JSON.stringify({version:1,enabled:false,stage:'PUBLISHED',generation:11,round:1,
     scope_id:'fixture-current-plan'}));
-  await expectContinue(recoveryBefore,'Review publication wakes recovered Work without a second ON');
-  const recoveredSends = await countMessages() - recoveryBefore;
+  await expectContinue(blockedRecoveryBefore,'Review publication wakes recovered Work without a second ON');
+  const recoveredSends = await countMessages() - blockedRecoveryBefore;
   await characterizeAutoPlan('recovered-Work-settled-without-second-click');
   assert.equal(recoveredSends, 1,
     'T003: one ON during unconfirmed plan eventually sends exactly once');
@@ -1603,6 +1635,7 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
       await browser.executeJavaScript("(()=>{const e=document.getElementById('prompt-textarea');e.textContent=" + JSON.stringify(draft) + ";e.dispatchEvent(new Event('input',{bubbles:true}))})()");
       const beforeDraft = await countMessages(); await endAnswer();
       await waitFor(() => autoPlan.view().reason === 'DRAFT_PRESENT', 'draft waits without disabling mode', snapshot);
+      await assertAutoPlanVisible({waiting:true,reason:'DRAFT_PRESENT'});
       assert.equal(await browser.executeJavaScript("document.getElementById('prompt-textarea').textContent"), draft);
       await noExtraSend(beforeDraft);
       assert.equal(await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').getAttribute('aria-pressed')"), 'true');

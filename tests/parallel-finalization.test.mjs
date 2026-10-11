@@ -68,6 +68,12 @@ test('restart sending/unknown states never repeat and cannot be mistaken for a m
  for(const status of ['sending','unknown']){
   const f=fixture(t);f.ledger.finalization={status,projectId:'project',scope:'scope',sessionId:'origin'};
   await f.runtime.signal('/main');assert.equal(f.calls.sent+f.calls.merged,0);assert.equal(f.ledger.finalization.status,status);
+  f.auth.set('/main','scope',false,'origin');
+  await f.runtime.signal('/main');
+  f.auth.set('/main','scope',true,'origin');
+  await Promise.all([f.runtime.signal('/main'),f.runtime.signal('/main')]);
+  assert.equal(f.calls.sent+f.calls.merged,0,'OFF/ON and duplicate events must not replay '+status);
+  assert.equal(f.ledger.finalization.status,status);
  }
 });
 test('F18: changing pause, busy without own user or unfinished/foreign reply cannot acknowledge final',async t=>{
