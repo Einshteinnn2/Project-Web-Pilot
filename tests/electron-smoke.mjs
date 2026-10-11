@@ -216,6 +216,12 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     return {autoPlanEnabled:state?.enabled===true,autoPlanCheckpoint:state?.sessions?.[p?.sessionId]?.autoPlanCheckpoint??null};};
   // Keep frame-based fixture checks running when another desktop window covers this one.
   sidebar.setBackgroundThrottling(false);
+  if(process.env.WP_SMOKE_ROTATION_ONLY==='1'){
+    await waitFor(()=>sidebar.executeJavaScript('typeof window.webPilot === "object"'),'isolated rotation IPC ready',snapshot);
+    await verifyRotationEndToEnd({sidebar,store,workspaceSetup,snapshot,selectWorkspace,liveSessions,dataDir,waitFor});
+    console.log(JSON.stringify({rotationEndToEnd:[1,4],mode:'isolated-fixture'}));
+    return;
+  }
   await verifyUninterruptedRequest(dataDir);
   assert.equal(app.isPackaged, false, 'Fixtures never run from a packaged app');
   assert.equal(permissionAllowed('media', 'https://chatgpt.com', { mediaTypes: ['audio'] }), true);
@@ -1451,8 +1457,10 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     'scope owner title is synchronized to native ChatGPT fixture', snapshot);
   await waitFor(async()=>{
     const current=await savedAutoState();
+    const disk=JSON.parse(await fs.readFile(path.join(dataDir,'settings.json'),'utf8')).projectAutoPlan?.[workspace];
     return current.autoPlanEnabled && autoPlan.view().enabled && snapshot().autoPlan.enabled
-      && snapshot().selected?.planExecution?.execution_origin_session_id===scopeOwner.sessionId;
+      && snapshot().selected?.planExecution?.execution_origin_session_id===scopeOwner.sessionId
+      && disk?.scopeId==='fixture-current-plan' && disk.sessionId===scopeOwner.sessionId;
   }, 'first confirmed plan binds original ON to the published origin',snapshot);
   const afterPublication = await characterizeAutoPlan('Kit-published-ACTIVE-without-second-ON');
   assert.equal(afterPublication.controllerON, true);
@@ -1901,13 +1909,145 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   const parallelFixture=await import('./parallel-execution-smoke-fixture.cjs');
   await parallelFixture.default.run({sidebar,store,workspaceSetup,snapshot,selectWorkspace,liveSessions,dataDir,waitFor,getArchiveWindow});
   await verifyDeletionRecoveryUi({sidebar,browser,store,snapshot,dataDir,deletion,execution,dialog,makeAux,getArchiveWindow,waitFor,neighbour:auxE});
+  await verifyRotationEndToEnd({sidebar,store,workspaceSetup,snapshot,selectWorkspace,liveSessions,dataDir,waitFor});
   const result = { ordinaryManualSend: true, manualRecoverySend: true, boundedReconnect: true, largeAutomaticSend: true, fullVersionBadge: true, septemberDOM: true, reverseScroll: true, directFirstChat: true, directFirstWork: true, startupLoginEntrypoint: true, uninterruptedFirstRequest: true, firstRequestNetworkTrace: true, duplicateStartupBlocked: true, earlyFirstLoadDiagnostics: true, guidedFirstRun: true, firstRunScreenshots: [path.join(dataDir, "startup-account.png"), path.join(dataDir, "startup-login.png"), path.join(dataDir, "startup-components.png")], fastSavedNavigation: true, lastNavigationWins: true, readinessBeforeOrAfterLoad: true, backgroundFailureRetry: true, liveChatColors: true, composerBackground: true, streamingAssistantColor: true, chatColorsPersistence: true, chatColorsReset: true, colorScreenshots, projectDoctor: true, doctorBackup: true, doctorOpen: true, doctorRefresh: true, doctorNewSession: true, doctorScreenshots, newestSessionFirst: true, projectSelectsNewest: true, threeSessionViewport: true, sessionScrollPreserved: true, visibleSessionScrollbar: true, nativeProjectsDisclosure: true, treePopover: true, treeScreenshots, singleActivePlanSessions: true, checkoutPlanAcrossOldChats: true, checkoutRecoveryShared: true, noPreparedPlanUi: true,
     singleActivePlanScreenshot, mode: 'isolated-fixture', electron: process.versions.electron, chromium: process.versions.chrome,
     views: window.contentView.children.length, secureRemote: true, sidebarIpc: true, archiveRestore: true, archiveRestart: true, deleteCancel: true, localDeletion: true, cloudChatPreserved: true, workspaceCreation: true, workspaceValidation: true, cancelPreservesSession: true, startupMessages: 4, canonicalPacketLoads: packetLoads, recoveryCache: true, operationProgress: true, progressScreenshot: path.join(dataDir, 'progress-ui.png'),
     tokenCounterRemoved: true, projectRename: true, sessionRename: true, sessionScopedTitleSync: true, restartKeepsSession: true, newChatCreatesSession: true, sessionTree: true, selectsEarlierSession: true, compactWorkspaceDetails: true, projectPathClipboard: true, sessionPlans: true, singleCurrentPlan: true, clientAutoPlan: true, autoPlan01TestAuto: true,
-    autoPlanFreshProcessModes: ['busy', 'sent', 'sending', 'manual', 'off'], autoPlanReloadNoDuplicate: true, manualChatWorkChoice: true, noAcceptanceButton: true, chromiumDiagnostics: true, contextWindowIndicatorRemoved: true, resizableSidebar: true, separateArchiveWindow: true, archiveMultiSelect: true, archiveForgetKeepsFolder: true, archiveRecoveryAfterInterrupt: true, replacementFolderProtected: true, orphanSettingsConfirmed: true, orphanUnknownRefused: true, shellTheme: true, nativeTitlebarTheme: nativeTheme.shouldUseDarkColors, toolCallFilter: true, microphonePermission: true, geolocationPermission: true, cameraPermission: false, fullContextBytes: Buffer.byteLength(fixtureContext), liveChatGPT: false, agentToolsRequired: false };
+    autoPlanFreshProcessModes: ['busy', 'sent', 'sending', 'manual', 'off'], autoPlanReloadNoDuplicate: true, rotationEndToEnd: [1,4], manualChatWorkChoice: true, noAcceptanceButton: true, chromiumDiagnostics: true, contextWindowIndicatorRemoved: true, resizableSidebar: true, separateArchiveWindow: true, archiveMultiSelect: true, archiveForgetKeepsFolder: true, archiveRecoveryAfterInterrupt: true, replacementFolderProtected: true, orphanSettingsConfirmed: true, orphanUnknownRefused: true, shellTheme: true, nativeTitlebarTheme: nativeTheme.shouldUseDarkColors, toolCallFilter: true, microphonePermission: true, geolocationPermission: true, cameraPermission: false, fullContextBytes: Buffer.byteLength(fixtureContext), liveChatGPT: false, agentToolsRequired: false };
   await fs.writeFile(path.join(dataDir, 'smoke-result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
+}
+
+// Full native TEST FIXTURE integration only. Creates its own disposable Kit
+// checkouts and uses actual sidebar IPC, Git task commits, independent embedded
+// Chromium views and the real ContextSession/AutoPlan pipeline. No live ChatGPT.
+async function verifyRotationEndToEnd({sidebar,store,workspaceSetup,snapshot,selectWorkspace,liveSessions,dataDir,waitFor}) {
+  assert.ok(path.basename(dataDir).startsWith('web-pilot-electron-smoke-'));
+  const {createFixture}=await import('../packages/workflow-kit/scripts/check-parallel-execution-fixture.mjs');
+  const ipc=(name,...args)=>sidebar.executeJavaScript('window.webPilot.'+name+'('+args.map(x=>JSON.stringify(x)).join(',')+')');
+  const record=(workspace,id)=>[...liveSessions.records.values()]
+    .find(r=>r.identity?.workspace===workspace&&r.identity.sessionId===id);
+  for(const limit of [1,4]) {
+    const root=createFixture(path.join(dataDir+'-projects','rotation-e2e-'+limit));
+    await selectWorkspace(root);
+    await waitFor(()=>store.selected()?.workspace===root&&snapshot().context.phase==='delivered',
+      'rotation '+limit+' initial full Recovery',snapshot);
+    const original=store.selected(),old=record(root,original.sessionId);
+    assert.equal(original.experience,'chat');
+    await ipc('openSettings');
+    await waitFor(()=>sidebar.executeJavaScript('!document.getElementById("chat-session-task-limit").disabled'),
+      'rotation '+limit+' setting enabled',snapshot);
+    await sidebar.executeJavaScript(`(()=>{const input=document.getElementById('chat-session-task-limit');
+      input.value=${limit};input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    await waitFor(()=>snapshot().chatSessionTaskLimit===limit,'rotation '+limit+' settings IPC',snapshot);
+    assert.equal(JSON.parse(await fs.readFile(path.join(dataDir,'settings.json'),'utf8')).chatSessionTaskLimit,limit);
+    await ipc('closeSettings');
+    assert.equal((await ipc('setAutoPlan',true)).ok,true);
+    const files=['README.md','SECOND.md','THIRD.md','FOUNDATION.md','TOOL-A.md','TOOL-B.md'];
+    const tasks=Array.from({length:limit+1},(_,i)=>({id:'T'+String(i+1).padStart(3,'0'),
+      title:'Rotation fixture '+(i+1),why:'Verified Kit commit',dependencies:i?['T'+String(i).padStart(3,'0')]:[],
+      functional_paths:[],documentation_paths:[files[i]],verification_ids:['dependency'],parallel_safe:false,
+      acceptance_criteria:['Git proof required'],expected_commit_message:'docs: rotation fixture task '+(i+1)}));
+    createScope(root,{scope_id:'rotation-smoke-'+limit,objective:'Chat rotation smoke '+limit,
+      approval_note:'User-approved isolated Chat rotation acceptance fixture.',
+      parallel_allowed:false,max_workers:1,execution_strategy:'sequential',
+      execution_reason:'Isolated Chat plan',execution_origin_session_id:original.sessionId,
+      acceptance_criteria:['Verified Recovery handoff'],
+      approved_scope:{functional_paths:[],documentation_paths:files.slice(0,tasks.length)},tasks});
+    await waitFor(()=>snapshot().selected?.scopeId==='rotation-smoke-'+limit
+      &&snapshot().autoPlan.enabled,'rotation '+limit+' published with ON',snapshot);
+    await old.view.webContents.executeJavaScript('window.fixtureAssistant("План опубликован")');
+    await waitFor(()=>old.view.webContents.executeJavaScript('window.fixtureMessages.length===2'),
+      'rotation '+limit+' first Continue after publication',snapshot);
+    assert.match(await old.view.webContents.executeJavaScript('window.fixtureMessages[1].text'),/^Продолжай/);
+    let neighbourRoot=null;
+    if(limit===1){
+      neighbourRoot=createFixture(path.join(dataDir+'-projects','rotation-neighbour'));
+      await selectWorkspace(neighbourRoot);
+      await waitFor(()=>store.selected()?.workspace===neighbourRoot&&snapshot().context.phase==='delivered',
+        'rotation hidden project: neighbour visible',snapshot);
+    }
+    for(let i=0;i<limit;i++){
+      const taskId=tasks[i].id;
+      await old.view.webContents.executeJavaScript(`(()=>{const b=document.createElement('button');
+        b.id='rotation-test-stop';b.dataset.testid='stop-button';document.body.append(b)})()`);
+      await waitFor(()=>old.pageState.current?.state.busy,'rotation '+limit+' busy T'+(i+1),snapshot);
+      startTask(root,taskId);
+      await fs.appendFile(path.join(root,files[i]),'\nRotation task '+taskId+' committed.\n');
+      assert.equal(commitTask(root,taskId).ok,true);
+      await waitFor(()=>store.inspect(root).then(p=>p.planView.completed===i+1),
+        'rotation '+limit+' Kit commit '+taskId,snapshot);
+      assert.equal(await old.view.webContents.executeJavaScript('window.fixtureMessages.length'),i+2,
+        'busy task cannot interrupt the existing Chat');
+      await old.view.webContents.executeJavaScript(`window.fixtureAssistant(${JSON.stringify('Задача '+taskId+' завершена.')});
+        document.getElementById('rotation-test-stop').remove()`);
+      if(i<limit-1) {
+        await waitFor(()=>old.view.webContents.executeJavaScript('window.fixtureMessages.length==='+String(i+3)),
+          'rotation '+limit+' continue current Chat after '+taskId,snapshot);
+      }
+    }
+    await waitFor(()=>store.snapshot().projects.find(p=>p.workspace===root).sessions.length===2,
+      'rotation '+limit+' created one target Chat',snapshot);
+    if(neighbourRoot)assert.equal(store.selected().workspace,neighbourRoot,
+      'hidden project must not replace the visible neighbour');
+    const target=store.snapshot().projects.find(p=>p.workspace===root).sessions.find(s=>s.sessionId!==original.sessionId);
+    await waitFor(()=>record(root,target.sessionId)?.controller.state.phase==='delivered'
+      &&store.project(root,target.sessionId)?.chatUrl,
+      'rotation '+limit+' confirmed new Recovery',snapshot);
+    const next=record(root,target.sessionId);
+    assert.equal(await old.view.webContents.executeJavaScript('window.fixtureMessages.length'),limit+1,
+      'old Chat must not receive Continue at the quota');
+    assert.equal(await next.view.webContents.executeJavaScript('window.fixtureMessages.length'),1,
+      'new Chat receives only its complete Recovery');
+    assert.equal((await next.view.webContents.executeJavaScript('window.fixtureMessages[0].files.length')),4,
+      'full four-part Recovery is delivered');
+    await next.view.webContents.executeJavaScript('window.fixtureAssistant("Recovery прочитан. Продолжаю план.")');
+    await waitFor(()=>next.view.webContents.executeJavaScript('window.fixtureMessages.length===2'),
+      'rotation '+limit+' first Continue in new Chat',snapshot);
+    assert.match(await next.view.webContents.executeJavaScript('window.fixtureMessages[1].text'),
+      new RegExp('Задача: '+tasks[limit].id));
+    const permission=JSON.parse(await fs.readFile(path.join(dataDir,'settings.json'),'utf8')).projectAutoPlan[root];
+    assert.equal(permission.enabled,true);assert.equal(permission.sessionId,target.sessionId);
+    assert.equal(permission.handoff.status,'done');
+    assert.equal(permission.sessions[target.sessionId].chatTaskCursor.counted.length,0);
+    const restarted=new WorkspaceSessions(store.file);await restarted.load();
+    assert.equal(restarted.project(root,target.sessionId).chatUrl,store.project(root,target.sessionId).chatUrl);
+    assert.equal(restarted.snapshot().projects.find(p=>p.workspace===root).sessions.length,2);
+    if(neighbourRoot){
+      assert.equal(restarted.selected().workspace,neighbourRoot,'background rotation stays hidden after restart');
+      await selectWorkspace(root);
+      await waitFor(()=>store.selected()?.sessionId===target.sessionId,
+        'rotation selected its replacement only inside source project',snapshot);
+    }
+    if(limit===4){
+      // Manual new Chat with AutoPlan still ON must transfer the exact same
+      // recipient only after Recovery, without a second OFF→ON click.
+      assert.equal((await ipc('newSession',root,'chat')).ok,true);
+      await waitFor(()=>store.snapshot().projects.find(p=>p.workspace===root).sessions.length===3,
+        'rotation manual new Chat registered',snapshot);
+      const manual=store.selected();
+      await waitFor(()=>record(root,manual.sessionId)?.controller.state.phase==='delivered'
+        &&store.project(root,manual.sessionId)?.chatUrl,
+        'rotation manual new Chat delivered Recovery',snapshot);
+      assert.equal((await record(root,manual.sessionId).view.webContents.executeJavaScript('window.fixtureMessages.length')),1);
+      const previous=await next.view.webContents.executeJavaScript('window.fixtureMessages.length');
+      await record(root,manual.sessionId).view.webContents.executeJavaScript('window.fixtureAssistant("Ручной новый Chat восстановлен")');
+      await waitFor(()=>record(root,manual.sessionId).view.webContents.executeJavaScript('window.fixtureMessages.length===2'),
+        'rotation manual new Chat continues without OFF ON',snapshot);
+      assert.equal(await next.view.webContents.executeJavaScript('window.fixtureMessages.length'),previous,
+        'old recipient cannot send after manual new Chat');
+      const persisted=JSON.parse(await fs.readFile(path.join(dataDir,'settings.json'),'utf8')).projectAutoPlan[root];
+      assert.equal(persisted.sessionId,manual.sessionId);
+      assert.equal(persisted.handoff.status,'done');
+    }
+    assert.equal((await ipc('setAutoPlan',false)).ok,true);
+    assert.equal(await next.view.webContents.executeJavaScript('window.fixtureMessages.length'),2,
+      'OFF stops future automatic messages');
+    await fs.writeFile(path.join(dataDir,'rotation-e2e-'+limit+'.json'),JSON.stringify({
+      limit,scope:'rotation-smoke-'+limit,oldSession:original.sessionId,newSession:target.sessionId,
+      sourceMessages:limit+1,destinationMessages:2,done:limit,fullRecoveryParts:4},null,2));
+  }
 }
 
 async function verifyDeletionRecoveryUi({sidebar,browser,store,snapshot,dataDir,deletion,execution,dialog,makeAux,getArchiveWindow,waitFor,neighbour}) {

@@ -331,20 +331,20 @@ async function prepareChatRotation({selected,boundary}) {
   const permission=projectAutoPlan.state(selected?.workspace);
   const currentPlan=source&&await readAutoPlanState(source,workspaceSetup.environment);
   if(!source||source.projectId!==selected.projectId||source.experience!=='chat'
-    ||source.archivedAt||source.sessionArchivedAt||source.scopeId!==selected.scopeId
+    ||source.archivedAt||source.sessionArchivedAt
     ||currentPlan?.confirmed!==true||currentPlan.scopeId!==selected.scopeId
     ||currentPlan.planExecution?.execution_strategy!=='sequential'
     ||!permission?.enabled||permission.scopeId!==selected.scopeId||permission.sessionId!==selected.sessionId)
     throw Object.assign(new Error('Ротация больше не принадлежит текущему Chat и плану.'),{code:'ROTATION_SOURCE_CHANGED'});
-  const cursor=projectAutoPlan.checkpoint(source.workspace,source.scopeId,source.sessionId).chatTaskCursor;
+  const cursor=projectAutoPlan.checkpoint(source.workspace,selected.scopeId,source.sessionId).chatTaskCursor;
   if(cursor?.counted?.at(-1)?.sha!==boundary)
     throw Object.assign(new Error('Граница выполненной микрозадачи изменилась.'),{code:'ROTATION_BOUNDARY_CHANGED'});
   const rotation={id:rotationOperationId({workspace:source.workspace,projectId:source.projectId,
-    scopeId:source.scopeId,sessionId:source.sessionId,boundary}),sourceSessionId:source.sessionId,
-    scopeId:source.scopeId,boundary,creationHead:cursor.head};
+    scopeId:selected.scopeId,sessionId:source.sessionId,boundary}),sourceSessionId:source.sessionId,
+    scopeId:selected.scopeId,boundary,creationHead:cursor.head};
   const wasVisible=liveSessions.visible?.identity?.workspace===source.workspace
     &&liveSessions.visible?.identity?.sessionId===source.sessionId;
-  projectAutoPlan.beginHandoff(source.workspace,source.scopeId,source.sessionId,{operationId:rotation.id,kind:'rotation'});
+  projectAutoPlan.beginHandoff(source.workspace,selected.scopeId,source.sessionId,{operationId:rotation.id,kind:'rotation'});
   await saveSettings();
   try {
     const target=await store.newSession(source.workspace,'chat',{

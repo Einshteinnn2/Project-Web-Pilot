@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1799,
+  "plan_revision": 1801,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -414,14 +414,21 @@
         "Все пять исключённых из T007 файлов включены явным выбором в подтверждённый Git-коммит Kit. Unit-all и electron-smoke проходят, рабочее дерево чистое перед T008."
       ],
       "expected_commit_message": "test: зафиксировать сквозную ротацию Chat и исправления T007",
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T007A",
         "role": "implementation"
       },
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "docs/planning/chat-session-rotation-spec.md",
+        "src/chat-session-rotation.mjs",
+        "src/main.mjs",
+        "tests/chat-session-rotation.test.mjs",
+        "tests/electron-smoke.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -614,7 +621,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1799
+Revision: 1801
 
 ## Цель
 
@@ -673,8 +680,8 @@ Revision: 1799
   - Файлы: tests/electron-smoke.mjs, tests/auto-plan.test.mjs, tests/chat-session-rotation.test.mjs, tests/settings-chat-session-rotation.test.mjs, tests/conversation-recovery.test.mjs, tests/context-session.test.mjs, tests/session-runtime.test.mjs, tests/project-auto-plan.test.mjs, tests/workspace-session.test.mjs, src/chat-session-rotation.mjs, src/main.mjs, src/project-session-auto-plan.mjs, src/context-session.mjs, src/session-runtime.mjs, src/project-auto-plan.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T006
-- [TODO] T007A: Закрепить проверенные изменения сквозной ротации — Ожидает
-  - Git Commit: [PENDING] test: зафиксировать сквозную ротацию Chat и исправления T007
+- [DONE] T007A: Закрепить проверенные изменения сквозной ротации — Завершено
+  - Git Commit: [DONE] test: зафиксировать сквозную ротацию Chat и исправления T007
   - Reference: chat-session-rotation-20261011 / T007A / implementation
   - Файлы: src/main.mjs, src/chat-session-rotation.mjs, tests/chat-session-rotation.test.mjs, tests/electron-smoke.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

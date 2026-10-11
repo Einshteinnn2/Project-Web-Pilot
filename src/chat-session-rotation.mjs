@@ -21,9 +21,14 @@ export function rotationOperationId({ workspace, projectId, scopeId, sessionId, 
 export function chatHandoffDecision({project,handoff,phase,page,blocked=false}={}) {
   if(!project||!handoff||handoff.status!=='waiting'||handoff.targetSessionId!==project.sessionId)
     return {status:'wait'};
-  if(project.manualStart||['error','chat-changed','legacy-session','send-unknown','stale','manual-session'].includes(phase)
-      ||['unknown','sending'].includes(project.attempt?.state))
+  if(project.manualStart||['error','send-unknown','manual-session'].includes(phase)
+      ||project.attempt?.state==='unknown'
+      ||['chat-changed','legacy-session','stale'].includes(phase)&&!!project.attempt?.sendStartedAtMs)
     return {status:'fail',reason:'ROTATION_RECOVERY_FAILED'};
+  // 'sending' is an expected intermediate phase while ContextSession is
+  // actually delivering. After restart its ambiguous outcome becomes
+  // 'send-unknown', which is terminal and cannot be replayed.
+  if(project.attempt?.state==='sending')return {status:'wait'};
   if(phase!=='delivered'||!project.chatUrl||project.attempt?.state!=='sent')return {status:'wait'};
   if(blocked||page?.connectionError||(page?.manualStopRevision??0)>0
       ||(page?.manualSendRevision??0)>0||(page?.manualInputRevision??0)>0)

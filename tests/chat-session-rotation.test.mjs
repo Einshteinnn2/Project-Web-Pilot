@@ -57,6 +57,8 @@ test('T006: only confirmed Recovery and an idle assistant can transfer authority
   assert.equal(decision({project:{...project,chatUrl:null}}).status,'wait');
   for(const phase of ['error','stale','send-unknown','chat-changed','manual-session','legacy-session'])
     assert.deepEqual(decision({phase}),{status:'fail',reason:'ROTATION_RECOVERY_FAILED'});
+  assert.equal(decision({project:{...project,attempt:{state:'sending',sendStartedAtMs:1}}}).status,'wait');
+  assert.equal(decision({phase:'chat-changed',project:{...project,attempt:null}}).status,'wait');
   for(const key of ['manualInputRevision','manualSendRevision','manualStopRevision'])
     assert.deepEqual(decision({page:{...page,[key]:1}}),{status:'fail',reason:'ROTATION_MANUAL_INTERVENTION'});
   assert.equal(decision({blocked:true}).status,'fail');
