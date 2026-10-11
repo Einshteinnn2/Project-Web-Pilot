@@ -4,12 +4,16 @@ import { advanceChatSessionTaskCounter } from './chat-session-rotation.mjs';
 
 export class ProjectAutoPlan {
   constructor({saved={},onChange=()=>{},identity=null,ownsSession=()=>true}={}) {
-    this.book={};this.onChange=onChange;this.identity=identity;this.ownsSession=ownsSession;
+    this.book={};this.handoffGuards=new Set();this.onChange=onChange;this.identity=identity;this.ownsSession=ownsSession;
     for(const [workspace,value] of Object.entries(saved??{}))if(workspace.startsWith('/')||/^[A-Za-z]:[\\/]/.test(workspace)) {
       if(value&&typeof value.scopeId==='string'&&value.sessions&&typeof value.sessions==='object'&&!Array.isArray(value.sessions))
         this.book[workspace]={projectId:value.projectId??null,scopeId:value.scopeId,enabled:value.enabled===true,sessionId:typeof value.sessionId==='string'?value.sessionId:null,sessions:structuredClone(value.sessions),awaitingPlan:value.scopeId===''&&value.awaitingPlan===true,offReason:value.offReason??null,
           planRevision:Number.isSafeInteger(value.planRevision)?value.planRevision:null,
           previousScopeId:typeof value.previousScopeId==='string'?value.previousScopeId:null,
+          handoff:value.handoff&&typeof value.handoff==='object'&&!Array.isArray(value.handoff)
+            &&['waiting','done','failed'].includes(value.handoff.status)
+            &&typeof value.handoff.scopeId==='string'&&typeof value.handoff.sourceSessionId==='string'
+            &&typeof value.handoff.operationId==='string'?structuredClone(value.handoff):null,
           executionStrategy:['parallel','sequential'].includes(value.executionStrategy)?value.executionStrategy:null};
     }
   }
@@ -24,6 +28,7 @@ export class ProjectAutoPlan {
     return state.projectId===id?state:undefined;
   }
   enabled(workspace,scopeId){const state=this.state(workspace);return !!state&&state.scopeId===(scopeId??'')&&state.enabled===true&&(!!scopeId||state.awaitingPlan===true);}
+  handoffPending(workspace){return this.handoffGuards.has(workspace);}
   finalizationAllowed(workspace,scopeId){const state=this.state(workspace);return !!state&&state.scopeId===scopeId&&(state.enabled||state.offReason==='complete');}
   sync(workspace,scopeId,{complete=false,confirmed=false,planRevision=null,originSessionId=null,executionStrategy=null}={}) {
     if(!workspace||(this.identity&&!this.identity(workspace)))return false;
@@ -39,6 +44,7 @@ export class ProjectAutoPlan {
       &&(revision<old.planRevision||(revision===old.planRevision&&old.scopeId!==scopeId)))
       return this.enabled(workspace,scopeId);
     if(old?.scopeId!==scopeId){
+      this.handoffGuards.delete(workspace);
       const inherited=old?.awaitingPlan===true&&old.enabled===true;
       // The published Kit origin takes priority over the pre-plan button
       // session. A missing (legacy) origin retains its former fallback; an
@@ -47,6 +53,7 @@ export class ProjectAutoPlan {
       this.book[workspace]={projectId:this.identity?.(workspace)??null,scopeId,enabled:inherited,
         sessionId:inherited?recipient:null,offReason:null,planRevision:revision,
         previousScopeId:(old?.scopeId||old?.previousScopeId)??null,
+        handoff:null,
         executionStrategy:['parallel','sequential'].includes(executionStrategy)?executionStrategy:null,
         sessions:Object.fromEntries(Object.entries(old?.sessions??{})
           .filter(([,entry])=>entry.automationCheckpoint).map(([id,entry])=>[id,{automationCheckpoint:entry.automationCheckpoint}]))};
@@ -64,12 +71,12 @@ export class ProjectAutoPlan {
   }
   set(workspace,scopeId,choice,sessionId=null){
     if(!workspace||(this.identity&&!this.identity(workspace)))return false;
-    if(!scopeId){const old=this.state(workspace);this.book[workspace]={projectId:this.identity?.(workspace)??null,scopeId:'',enabled:choice===true,awaitingPlan:choice===true,offReason:choice?null:'manual',sessionId,sessions:old?.sessions??{},planRevision:old?.planRevision??null,
+    if(!scopeId){this.handoffGuards.delete(workspace);const old=this.state(workspace);this.book[workspace]={projectId:this.identity?.(workspace)??null,scopeId:'',enabled:choice===true,awaitingPlan:choice===true,offReason:choice?null:'manual',sessionId,sessions:old?.sessions??{},planRevision:old?.planRevision??null,
       previousScopeId:(old?.scopeId||old?.previousScopeId)??null};this.onChange(workspace);return choice===true;}
     // An explicit user toggle follows a separately verified plan read by the IPC.
     this.sync(workspace,scopeId,{confirmed:true});const state=this.state(workspace);
     const reason=choice?null:'manual';
-    if(state.enabled!==(choice===true)||state.offReason!==reason||(choice&&sessionId&&state.sessionId!==sessionId)){state.enabled=choice===true;state.offReason=reason;if(choice&&sessionId)state.sessionId=sessionId;this.onChange(workspace);}return state.enabled;
+    if(state.enabled!==(choice===true)||state.offReason!==reason||(choice&&sessionId&&state.sessionId!==sessionId)||state.handoff){state.enabled=choice===true;state.offReason=reason;if(choice&&sessionId)state.sessionId=sessionId;state.handoff=null;this.handoffGuards.delete(workspace);this.onChange(workspace);}return state.enabled;
   }
   // A transient read error, Review transaction or stale NONE is not evidence
   // that a previously confirmed unfinished scope has disappeared. Explicit
@@ -84,6 +91,55 @@ export class ProjectAutoPlan {
   saveCheckpoint(workspace,scopeId,sessionId,patch) {
     if(!this.state(workspace)||this.state(workspace).scopeId!==scopeId||!this.ownsSession(workspace,sessionId))return;
     this.state(workspace).sessions[sessionId]={...this.checkpoint(workspace,scopeId,sessionId),...patch};return this.onChange(workspace);
+  }
+  beginHandoff(workspace,scopeId,sourceSessionId,{operationId,kind='rotation'}={}) {
+    const state=this.state(workspace);
+    if(state?.handoff?.status==='done')state.handoff=null;
+    if(!state?.enabled||state.scopeId!==scopeId||state.executionStrategy==='parallel'
+      ||state.sessionId!==sourceSessionId||!this.ownsSession(workspace,sourceSessionId)
+      ||typeof operationId!=='string'||!operationId||!['rotation','manual'].includes(kind))
+      throw Object.assign(new Error('Право продолжения больше не принадлежит исходному Chat.'),{code:'ROTATION_AUTHORITY_CHANGED'});
+    if(state.handoff){
+      if(state.handoff.operationId!==operationId||state.handoff.status!=='waiting')
+        throw Object.assign(new Error('Передача AutoPlan уже началась или заблокирована.'),{code:'ROTATION_HANDOFF_CONFLICT'});
+      return state.handoff;
+    }
+    state.handoff={scopeId,sourceSessionId,targetSessionId:null,operationId,kind,status:'waiting'};
+    state.sessionId=null;this.onChange(workspace);
+    return structuredClone(state.handoff);
+  }
+  attachHandoff(workspace,operationId,targetSessionId){
+    const state=this.state(workspace),handoff=state?.handoff;
+    if(!state?.enabled||handoff?.operationId!==operationId||handoff.status!=='waiting'
+      ||!this.ownsSession(workspace,targetSessionId)
+      ||handoff.targetSessionId&&handoff.targetSessionId!==targetSessionId)
+      throw Object.assign(new Error('Целевая Chat-сессия не принадлежит передаче.'),{code:'ROTATION_HANDOFF_CONFLICT'});
+    if(handoff.targetSessionId===targetSessionId)return structuredClone(handoff);
+    handoff.targetSessionId=targetSessionId;this.onChange(workspace);return structuredClone(handoff);
+  }
+  finishHandoff(workspace,operationId,targetSessionId){
+    const state=this.state(workspace),handoff=state?.handoff;
+    if(!state?.enabled||handoff?.operationId!==operationId||handoff.status!=='waiting'
+      ||handoff.targetSessionId!==targetSessionId||!this.ownsSession(workspace,targetSessionId))
+      throw Object.assign(new Error('Передача AutoPlan больше не действительна.'),{code:'ROTATION_HANDOFF_CONFLICT'});
+    // The in-memory recipient is still NOT allowed to Send until settings.json
+    // has durably recorded the transfer. A restart reads the saved state.
+    this.handoffGuards.add(workspace);
+    state.sessionId=targetSessionId;handoff.status='done';this.onChange(workspace);
+  }
+  releaseHandoff(workspace,operationId,targetSessionId){
+    const h=this.state(workspace)?.handoff;
+    if(h?.operationId!==operationId||h.status!=='done'||h.targetSessionId!==targetSessionId)
+      throw Object.assign(new Error('Передача права продолжения изменилась.'),{code:'ROTATION_HANDOFF_CONFLICT'});
+    this.handoffGuards.delete(workspace);
+  }
+  failHandoff(workspace,operationId,code='ROTATION_HANDOFF_FAILED'){
+    const state=this.state(workspace),handoff=state?.handoff;
+    if(!handoff||handoff.operationId!==operationId
+      ||handoff.status!=='waiting'&&!(handoff.status==='done'&&this.handoffPending(workspace)))return false;
+    this.handoffGuards.delete(workspace);
+    handoff.status='failed';handoff.error=typeof code==='string'&&/^ROTATION_[A-Z_]+$/.test(code)?code:'ROTATION_HANDOFF_FAILED';
+    state.sessionId=null;this.onChange(workspace);return true;
   }
   // Read-only with respect to permission: counting never toggles AutoPlan or
   // transfers its recipient. The caller must persist settings before relying

@@ -22,7 +22,8 @@ export function configureProjectAutoPlan(record,{store,authorization,inspectPlan
     // An ON armed before the first scope belongs to the project, not to the
     // chat which happened to be selected when ON was clicked. Every main chat
     // may show WAIT; none can Send until a confirmed plan binds its origin.
-    return state.awaitingPlan===true || state.sessionId===p.sessionId;
+    return !authorization.handoffPending?.(p.workspace)
+      &&(state.awaitingPlan===true || state.sessionId===p.sessionId);
   };
   const save=patch=>{const project=selected();authorization.saveCheckpoint(project.workspace,project.scopeId,project.sessionId,patch);};
   const automation=new AutomationSendState({save:checkpoint=>save({automationCheckpoint:checkpoint})});
@@ -50,8 +51,15 @@ export function configureProjectAutoPlan(record,{store,authorization,inspectPlan
       &&!record.composer.inFlight&&!record.controller.pending&&permitted(p)&&!!monitor?.view(record.project())&&!monitor.error
       &&p.planExecution?.execution_strategy!=='parallel'&&['delivered','stale','manual-session'].includes(record.controller.state.phase);},
     saveCheckpoint:checkpoint=>save({autoPlanCheckpoint:checkpoint}),
-    send:(text,canContinue,onBeforeSend)=>automation.send({selected:selected(),page:flow.page,kind:'plan',ready:canContinue,
-      perform:()=>record.composer.sendUserMessage({text,canContinue,onBeforeSend,waitForAcknowledgement:false,cleanupOnCancel:true})})});
+    send:(text,canContinue,onBeforeSend)=>{
+      // A manual new Chat or automatic handoff may revoke the old recipient
+      // between Composer insertion and click; recheck authority at both gates.
+      const ready=()=>canContinue()&&permitted(selected());
+      const before=async()=>ready()&&await onBeforeSend()&&ready();
+      return automation.send({selected:selected(),page:flow.page,kind:'plan',ready,
+        perform:()=>record.composer.sendUserMessage({text,canContinue:ready,onBeforeSend:before,
+          waitForAcknowledgement:false,cleanupOnCancel:true})});
+    }});
   let savedScope;
   const update=()=>{
     const p=selected();if(!p)return;

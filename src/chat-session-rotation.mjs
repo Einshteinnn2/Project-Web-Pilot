@@ -15,6 +15,24 @@ export function rotationOperationId({ workspace, projectId, scopeId, sessionId, 
   return 'rotation-' + createHash('sha256').update(JSON.stringify([workspace,projectId,scopeId,sessionId,boundary])).digest('hex');
 }
 
+// Only the persisted, *delivered* ContextSession and a completed assistant turn
+// can give the new chat the project's single continuation recipient. Neither
+// creating a session nor dispatching startup Send is sufficient.
+export function chatHandoffDecision({project,handoff,phase,page,blocked=false}={}) {
+  if(!project||!handoff||handoff.status!=='waiting'||handoff.targetSessionId!==project.sessionId)
+    return {status:'wait'};
+  if(project.manualStart||['error','chat-changed','legacy-session','send-unknown','stale','manual-session'].includes(phase)
+      ||['unknown','sending'].includes(project.attempt?.state))
+    return {status:'fail',reason:'ROTATION_RECOVERY_FAILED'};
+  if(phase!=='delivered'||!project.chatUrl||project.attempt?.state!=='sent')return {status:'wait'};
+  if(blocked||page?.connectionError||(page?.manualStopRevision??0)>0
+      ||(page?.manualSendRevision??0)>0||(page?.manualInputRevision??0)>0)
+    return {status:'fail',reason:'ROTATION_MANUAL_INTERVENTION'};
+  if(!page||page.busy||page.draftPresent||page.lastMessageRole!=='assistant'||page.url!==project.chatUrl)
+    return {status:'wait'};
+  return {status:'ready'};
+}
+
 // Called after the existing AutoPlan eligibility gates and again immediately
 // before Composer click. Checking quota never creates a Chat by itself.
 export function chatRotationDecision({ selected, plan, count, limit, blocked = false }) {

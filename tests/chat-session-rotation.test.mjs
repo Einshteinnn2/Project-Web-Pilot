@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { advanceChatSessionTaskCounter, chatRotationDecision } from '../src/chat-session-rotation.mjs';
+import { advanceChatSessionTaskCounter, chatRotationDecision, chatHandoffDecision } from '../src/chat-session-rotation.mjs';
 import { readChatSessionTaskProof } from '../src/auto-plan-state.mjs';
 import { renderPlan } from '@webpilot/workflow-kit/lib/plan';
 
@@ -39,6 +39,31 @@ test('T004 decision: quotas 1 and 4, terminal DONE, Work, parallel, Stop and unc
  assert.equal(decide(4,4,{plan:{...plan,planExecution:{execution_strategy:'parallel'}}}).status,'continue');
  assert.equal(decide(-1,4).reason,'ROTATION_PROOF_ERROR');
  assert.equal(decide(4,0).reason,'ROTATION_SETTING_INVALID');
+});
+
+test('T006: only confirmed Recovery and an idle assistant can transfer authority',()=>{
+  const handoff={status:'waiting',targetSessionId:'new'};
+  const project={sessionId:'new',experience:'chat',chatUrl:'https://chatgpt.com/c/new-session',
+    attempt:{state:'sent',sendStartedAtMs:1}};
+  const page={url:project.chatUrl,busy:false,lastMessageRole:'assistant',turnId:'assistant-1',
+    manualInputRevision:0,manualSendRevision:0,manualStopRevision:0,draftPresent:false};
+  const decision=(changes={})=>chatHandoffDecision({project,handoff,phase:'delivered',page,...changes});
+  assert.deepEqual(decision(),{status:'ready'});
+  assert.equal(decision({phase:'waiting-chat'}).status,'wait');
+  assert.equal(decision({phase:'waiting-generation'}).status,'wait');
+  assert.equal(decision({page:{...page,busy:true}}).status,'wait');
+  assert.equal(decision({page:{...page,lastMessageRole:'user'}}).status,'wait');
+  assert.equal(decision({page:{...page,draftPresent:true}}).status,'wait');
+  assert.equal(decision({project:{...project,chatUrl:null}}).status,'wait');
+  for(const phase of ['error','stale','send-unknown','chat-changed','manual-session','legacy-session'])
+    assert.deepEqual(decision({phase}),{status:'fail',reason:'ROTATION_RECOVERY_FAILED'});
+  for(const key of ['manualInputRevision','manualSendRevision','manualStopRevision'])
+    assert.deepEqual(decision({page:{...page,[key]:1}}),{status:'fail',reason:'ROTATION_MANUAL_INTERVENTION'});
+  assert.equal(decision({blocked:true}).status,'fail');
+  assert.equal(decision({project:{...project,attempt:{state:'unknown'}}}).status,'fail');
+  assert.equal(decision({project:{...project,manualStart:true}}).status,'fail');
+  assert.equal(decision({handoff:{...handoff,status:'failed'}}).status,'wait');
+  assert.equal(decision({handoff:{...handoff,targetSessionId:'other'}}).status,'wait');
 });
 
 test('a new Chat starts at zero even when the plan already has completed tasks', () => {

@@ -99,7 +99,7 @@ const failure = (code, message) => Object.assign(new Error(message), { code });
 export function rotationRecoveryStatus(project, phase) {
   if (!project?.rotation?.id) return null;
   const attempt=project.attempt;
-  if(project.manualStart || ['error','chat-changed','legacy-session','send-unknown'].includes(phase)
+  if(project.manualStart || ['error','chat-changed','legacy-session','send-unknown','stale'].includes(phase)
       || attempt?.state==='unknown'||attempt?.state==='sending')
     return {state:'blocked',retry:false};
   if(phase==='delivered' && project.chatUrl && attempt?.state==='sent')

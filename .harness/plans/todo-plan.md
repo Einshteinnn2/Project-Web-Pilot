@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1794,
+  "plan_revision": 1796,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -293,8 +293,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T006",
@@ -329,7 +329,18 @@
         "Creation/attachment/delivery/UNKNOWN/Stop/OFF/restart не теряют Kit DONE, не делают дублей, оставляют видимую ошибку и безопасный ручной выход."
       ],
       "expected_commit_message": "feat: Перенести право AutoPlan и защитить сбои передачи",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "docs/planning/chat-session-rotation-spec.md",
+        "src/chat-session-rotation.mjs",
+        "src/context-session.mjs",
+        "src/main.mjs",
+        "src/project-auto-plan.mjs",
+        "src/project-session-auto-plan.mjs",
+        "src/ui/sidebar.mjs",
+        "tests/chat-session-rotation.test.mjs",
+        "tests/project-auto-plan.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -566,7 +577,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1794
+Revision: 1796
 
 ## Цель
 
@@ -613,8 +624,8 @@ Revision: 1794
   - Файлы: src/chat-session-rotation.mjs, src/main.mjs, src/workspace-session.mjs, src/session-runtime.mjs, src/context-session.mjs, src/project-auto-plan.mjs, tests/chat-session-rotation.test.mjs, tests/workspace-session.test.mjs, tests/context-session.test.mjs, tests/session-runtime.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T004
-- [TODO] T006: Перенести право AutoPlan и защитить сбои передачи — Ожидает
-  - Git Commit: [PENDING] feat: Перенести право AutoPlan и защитить сбои передачи
+- [DONE] T006: Перенести право AutoPlan и защитить сбои передачи — Завершено
+  - Git Commit: [DONE] feat: Перенести право AutoPlan и защитить сбои передачи
   - Reference: chat-session-rotation-20261011 / T006 / implementation
   - Файлы: src/chat-session-rotation.mjs, src/main.mjs, src/project-auto-plan.mjs, src/project-session-auto-plan.mjs, src/context-session.mjs, src/ui/sidebar.mjs, tests/chat-session-rotation.test.mjs, tests/project-auto-plan.test.mjs, tests/context-session.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

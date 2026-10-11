@@ -15,12 +15,13 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WorkspaceSessions, normalizeChatUrl, activeSessionsNewestFirst } from './workspace-session.mjs';
 import { DEFAULT_PARALLEL_SETTINGS, validateParallelSettings } from './parallel-settings.mjs';
 import { DEFAULT_CHAT_SESSION_TASK_LIMIT, restoreChatSessionTaskLimit, validateChatSessionTaskLimit } from './chat-session-rotation-settings.mjs';
 import { readChatSessionTaskProof } from './auto-plan-state.mjs';
-import { rotationOperationId } from './chat-session-rotation.mjs';
+import { rotationOperationId,chatHandoffDecision } from './chat-session-rotation.mjs';
 import { installChatGPTAutoScroll } from './chatgpt-auto-scroll.mjs';
 import { ChatColors, normalizeChatColors, validateColorChange, DEFAULT_COLORS } from './chatgpt-colors.mjs';
 import { ChatColorsWindow } from './chat-colors-window.mjs';
@@ -92,13 +93,16 @@ let shellTheme = 'light';
 let hideToolCalls = true;
 const projectAutoPlan=new ProjectAutoPlan({identity:workspace=>store.snapshot().projects.find(p=>p.workspace===workspace)?.projectId,
   ownsSession:(workspace,id)=>store.snapshot().projects.some(p=>p.workspace===workspace&&p.sessions.some(s=>s.sessionId===id)),onChange:workspace=>{
-  for(const record of liveSessions.records.values()) {
-    const project=record.project();
-    if((project?.parentWorkspace??project?.workspace)!==workspace)continue;
-    record.primaryAutomation?.update();
-    if(record.executor){record.executor.setEnabled(projectAutoPlan.enabled(workspace,project.parentScopeId));record.controller.signal();}
-  }
-  const persisted=saveSettings();void persisted.catch(report);void execution.signal(workspace);publish();
+  // Disk authority must be durable before any controller may dispatch Send.
+  const persisted=saveSettings();void persisted.then(()=>{
+    for(const record of liveSessions.records.values()) {
+      const project=record.project();
+      if((project?.parentWorkspace??project?.workspace)!==workspace)continue;
+      record.primaryAutomation?.update();
+      if(record.executor){record.executor.setEnabled(projectAutoPlan.enabled(workspace,project.parentScopeId));record.controller.signal();}
+    }
+    void execution.signal(workspace);publish();
+  },report);
   return persisted;
 }});
 let reviewCheckpoint = null, automationCheckpoint = null;
@@ -194,6 +198,58 @@ function configurePrimary(record) {
     taskLimit:()=>chatSessionTaskLimit,onRotationReady:prepareChatRotation,
     log:(event,fields)=>record.diagnostics?.log.record('auto-plan',event,fields)});
 }
+const handoffChecks=new Map();
+const handoffRerun=new Set();
+function scheduleHandoffCheck(record) {
+  const project=record?.project();if(!project||record.disposed)return;
+  const handoff=projectAutoPlan.state(project.workspace)?.handoff;
+  if(handoff?.status!=='waiting'||handoff.targetSessionId!==project.sessionId)return;
+  const key=project.workspace;
+  if(handoffChecks.has(key)){handoffRerun.add(key);return;}
+  const operation=(async()=>{
+    const current=()=>projectAutoPlan.state(project.workspace)?.handoff?.operationId===handoff.operationId
+      &&projectAutoPlan.state(project.workspace)?.handoff?.status==='waiting'
+      &&projectAutoPlan.state(project.workspace)?.enabled===true
+      &&record.project()?.sessionId===project.sessionId&&!record.disposed;
+    if(!current())return;
+    const target=record.project(),phase=record.controller.state.phase;
+    if(record.error){projectAutoPlan.failHandoff(project.workspace,handoff.operationId,'ROTATION_RECOVERY_FAILED');return;}
+    const p=record.pageState.current?.state;
+    const decision=chatHandoffDecision({project:target,handoff,phase,page:p,
+      blocked:!!record.error||record.primaryAutomation?.automation?.blocked(target)});
+    if(decision.status==='fail'){
+      projectAutoPlan.failHandoff(project.workspace,handoff.operationId,decision.reason);return;
+    }
+    if(decision.status!=='ready'||record.loading||!record.ready||record.controller.pending||record.composer.inFlight)return;
+    await record.primaryAutomation?.automation?.stopSave;
+    if(record.primaryAutomation?.automation?.blocked(target)){
+      projectAutoPlan.failHandoff(project.workspace,handoff.operationId,'ROTATION_MANUAL_INTERVENTION');return;
+    }
+    const before=JSON.stringify([p.turnId,p.userTurnId,p.manualStopRevision,p.manualSendRevision,p.manualInputRevision]);
+    const checked=await readAutoPlanState(target,workspaceSetup.environment).catch(()=>null);
+    if(!current())return;
+    if(!checked?.confirmed||checked.projectId!==target.projectId||checked.scopeId!==handoff.scopeId
+        ||checked.scopeStatus!=='ACTIVE'||checked.planExecution?.execution_strategy!=='sequential'
+        ||checked.planView?.tasks?.every(t=>t.status==='done')){
+      projectAutoPlan.failHandoff(project.workspace,handoff.operationId,'ROTATION_PLAN_CHANGED');return;
+    }
+    const after=record.pageState.current?.state;
+    if(record.controller.state.phase!=='delivered'||after?.busy||after?.lastMessageRole!=='assistant'
+        ||after?.draftPresent||after?.url!==target.chatUrl
+        ||JSON.stringify([after?.turnId,after?.userTurnId,after?.manualStopRevision,after?.manualSendRevision,after?.manualInputRevision])!==before)return;
+    projectAutoPlan.finishHandoff(project.workspace,handoff.operationId,target.sessionId);
+    await settingsSaveTail;
+    projectAutoPlan.releaseHandoff(project.workspace,handoff.operationId,target.sessionId);
+    record.primaryAutomation?.update();
+    void record.primaryAutomation?.flow.planChanged();
+  })().catch(error=>{
+    if(projectAutoPlan.failHandoff(project.workspace,handoff.operationId,'ROTATION_HANDOFF_FAILED'))report(error);
+  }).finally(()=>{
+    handoffChecks.delete(key);
+    if(handoffRerun.delete(key))scheduleHandoffCheck(record);
+  });
+  handoffChecks.set(key,operation);
+}
 const planReview = new PlanReviewClient({selected:()=>store.selected(),onChange:()=>publish()});
 const reviewContinuation=new ReviewContinuation({selected:()=>store.selected(),client:planReview,
   send:sendAutomation,onChange:()=>publish(),
@@ -213,6 +269,16 @@ function applyObservedPage(event, record = liveSessions.visible) {
     if(!record.loading)observeManualConversation(event.state,record);
   }
   record.primaryAutomation?.observe(event);
+  if(!event.reset&&record.identity&&!record.identity.assignmentId){
+    const h=projectAutoPlan.state(record.identity.workspace)?.handoff;
+    const stop=event.state.manualStopRevision??0,send=event.state.manualSendRevision??0;
+    if(h?.status==='waiting'&&h.sourceSessionId===record.identity.sessionId
+        &&((record.handoffStopRevision!==undefined&&stop>record.handoffStopRevision)
+          ||(record.handoffSendRevision!==undefined&&send>record.handoffSendRevision)))
+      projectAutoPlan.failHandoff(record.identity.workspace,h.operationId,'ROTATION_MANUAL_INTERVENTION');
+    record.handoffStopRevision=stop;record.handoffSendRevision=send;
+  }
+  if(!event.reset)scheduleHandoffCheck(record);
   record.executor?.observe(event);
   const safety=JSON.stringify([event.documentId,event.state?.url,event.state?.busy,event.state?.lastMessageRole,event.state?.connectionError,
     event.state?.draftPresent,event.state?.editorAvailable,event.state?.writable,event.state?.turnId,event.state?.userTurnId,
@@ -233,6 +299,7 @@ const liveSessions = new SessionRuntimes({store,runtime:()=>runtime,contextCache
       :path.join(sourceDir,'../resources/chatgpt-page-observer-preload.cjs')}}),
   onChange:record=>{
     if(record===liveSessions.visible)pageLoading=record.loading;record.primaryAutomation?.update();record.executor?.changed();
+    scheduleHandoffCheck(record);
     if(record.identity&&!record.identity.assignmentId&&execution.unwatch.has(record.identity.workspace)) {
       const stopped=executorPageState(record).stopped;
       if(record.executionStopped!==stopped){record.executionStopped=stopped;void execution.signal(record.identity.workspace);}
@@ -277,17 +344,28 @@ async function prepareChatRotation({selected,boundary}) {
     scopeId:source.scopeId,boundary,creationHead:cursor.head};
   const wasVisible=liveSessions.visible?.identity?.workspace===source.workspace
     &&liveSessions.visible?.identity?.sessionId===source.sessionId;
-  const target=await store.newSession(source.workspace,'chat',{
-    executionSnapshot:source.executionSnapshot,rotation});
-  if(!target||target.rotation?.id!==rotation.id)
-    throw Object.assign(new Error('Новая сессия не была сохранена.'),{code:'ROTATION_TARGET_MISSING'});
-  const record=await openRecordedRotation(target);
-  if(wasVisible && store.selected()?.workspace===source.workspace
-      &&store.selected()?.sessionId===target.sessionId && !record.disposed){
-    selectLiveSession(target);
-    publish();
+  projectAutoPlan.beginHandoff(source.workspace,source.scopeId,source.sessionId,{operationId:rotation.id,kind:'rotation'});
+  await saveSettings();
+  try {
+    const target=await store.newSession(source.workspace,'chat',{
+      executionSnapshot:source.executionSnapshot,rotation});
+    if(!target||target.rotation?.id!==rotation.id)
+      throw Object.assign(new Error('Новая сессия не была сохранена.'),{code:'ROTATION_TARGET_MISSING'});
+    projectAutoPlan.attachHandoff(source.workspace,rotation.id,target.sessionId);
+    await saveSettings();
+    const record=await openRecordedRotation(target);
+    if(wasVisible && store.selected()?.workspace===source.workspace
+        &&store.selected()?.sessionId===target.sessionId && !record.disposed){
+      selectLiveSession(target);
+      publish();
+    }
+    scheduleHandoffCheck(record);
+    return {sessionId:target.sessionId,phase:record.controller.state.phase};
+  }catch(error){
+    projectAutoPlan.failHandoff(source.workspace,rotation.id,'ROTATION_HANDOFF_FAILED');
+    await saveSettings();
+    throw error;
   }
-  return {sessionId:target.sessionId,phase:record.controller.state.phase};
 }
 
 async function openRecordedRotation(target) {
@@ -314,14 +392,68 @@ function restoreRotationPages() {
     for(const session of project.sessions.filter(s=>s.rotation&&!s.archivedAt)){
       const permission=projectAutoPlan.state(project.workspace);
       if(!permission?.enabled||permission.scopeId!==session.rotation.scopeId
-          ||permission.sessionId!==session.rotation.sourceSessionId
+          ||permission.handoff?.status!=='waiting'
+          ||permission.handoff?.targetSessionId!==session.sessionId
+          ||permission.handoff?.operationId!==session.rotation.id
           ||!project.sessions.some(s=>s.sessionId===session.rotation.sourceSessionId&&!s.archivedAt))continue;
       if(project.workspace===visible?.workspace&&session.sessionId===visible.sessionId)continue;
       const target=store.project(project.workspace,session.sessionId);
       if(!target || liveRecord(target)?.ready)continue;
-      void openRecordedRotation(target)
-        .catch(error=>{const record=liveRecord(target);if(record)sessionRuntimeError(record,error);else report(error);});
+      void openRecordedRotation(target).then(scheduleHandoffCheck)
+        .catch(error=>{
+          projectAutoPlan.failHandoff(project.workspace,permission.handoff.operationId,'ROTATION_HANDOFF_FAILED');
+          const record=liveRecord(target);if(record)sessionRuntimeError(record,error);else report(error);
+        });
     }
+}
+async function restorePendingHandoffPages() {
+  const visible=store.selected();
+  const openBackground=async target=>{
+    const record=liveSessions.ensure(target),readiness=await workspaceSetup.ready(target.workspace);
+    if(!readiness.ready)throw Object.assign(new Error('Проект не готов к Recovery.'),{code:'ROTATION_TARGET_NOT_READY'});
+    record.ready=true;
+    await liveSessions.navigate(record,target.chatUrl??chatGPTEntrypoint('chat'),
+      {freshDraft:!target.chatUrl&&!target.attempt});
+    scheduleHandoffCheck(record);
+  };
+  for(const [workspace,state] of Object.entries(projectAutoPlan.book)){
+    const h=state.handoff;
+    if(!state.enabled||h?.status!=='waiting')continue;
+    if(!h.targetSessionId&&h.kind==='rotation'){
+      // The session record and the authority ledger are two durable stores.
+      // A crash between their commits must recover by operation id, not by
+      // allocating another Chat or by assuming the existing one is lost.
+      const registered=store.snapshot().projects.find(p=>p.workspace===workspace)
+        ?.sessions.find(s=>s.rotation?.id===h.operationId&&!s.archivedAt);
+      if(registered){
+        projectAutoPlan.attachHandoff(workspace,h.operationId,registered.sessionId);
+        await saveSettings();
+      }
+    }
+    const target=projectAutoPlan.state(workspace)?.handoff?.targetSessionId
+      &&store.project(workspace,projectAutoPlan.state(workspace).handoff.targetSessionId);
+    if(!target||target.archivedAt||target.sessionArchivedAt||target.scopeId!==h.scopeId){
+      projectAutoPlan.failHandoff(workspace,h.operationId,'ROTATION_TARGET_MISSING');continue;
+    }
+    if(target.rotation)continue; // The stored rotation is reopened by restoreRotationPages.
+    if(workspace===visible?.workspace&&target.sessionId===visible?.sessionId)continue;
+    void openBackground(target).catch(error=>{
+      projectAutoPlan.failHandoff(workspace,h.operationId,'ROTATION_HANDOFF_FAILED');report(error);
+    });
+  }
+  // A successfully transferred background Chat is still the project's single
+  // AutoPlan recipient after restart. Reopen the saved URL only; ContextSession
+  // must observe its sent/UNKNOWN startup attempt rather than submit another.
+  for(const [workspace] of Object.entries(projectAutoPlan.book)){
+    const authority=projectAutoPlan.state(workspace),h=authority?.handoff;
+    if(!authority?.enabled||h?.status!=='done'||authority.sessionId!==h.targetSessionId)continue;
+    const target=store.project(workspace,h.targetSessionId);
+    if(!target||target.archivedAt||target.sessionArchivedAt||target.experience!=='chat'
+      ||workspace===visible?.workspace&&target.sessionId===visible?.sessionId)continue;
+    void (target.rotation
+      ?liveSessions.openRotationChat(target,{checkReady:folder=>workspaceSetup.ready(folder)})
+      :openBackground(target)).catch(report);
+  }
 }
 async function restoreExecutionPage(project,assignment=null) {
   if(liveRecord(project)?.ready&&(!assignment||liveRecord(project).executor))return project;
@@ -551,7 +683,16 @@ function snapshot() {
     conversationRecovery: conversationRecovery?.view() ?? { phase: 'idle', message: '', canRetry: false },
     autoPlan: {...(liveSessions.visible?.executor?.flow.view()??autoPlan.view()),
       enabled:projectAutoPlan.enabled(saved?.parentWorkspace??saved?.workspace,saved?.parentScopeId??info?.scopeId??saved?.scopeId)
-        ||projectAutoPlan.enabled(saved?.parentWorkspace??saved?.workspace,null)},
+        ||projectAutoPlan.enabled(saved?.parentWorkspace??saved?.workspace,null),
+      ...(()=>{
+        const h=projectAutoPlan.state(saved?.parentWorkspace??saved?.workspace)?.handoff;
+        if(!h||!['waiting','failed'].includes(h.status))return {};
+        return {phase:h.status==='failed'?'paused':'waiting',active:false,
+          reason:h.status==='failed'?(h.error??'ROTATION_HANDOFF_FAILED'):'ROTATION_PENDING',
+          message:h.status==='failed'
+            ?'Автопродолжение остановлено: переход Chat завершился ошибкой. План и выполненные задачи сохранены. Проверьте чат и продолжите вручную.'
+            :'Новая Chat-сессия получает Recovery. Ждём завершения её первого ответа.'};
+      })()},
     planReview: {...planReview.view(),...(reviewContinuation.persistenceError?{message:reviewContinuation.flow.state.message,indicator:'attention'}: {})},
     selected, context: controller?.state ?? { phase: 'selected', servicesReady: false, messageSent: false },
     contextPreparation: { busy: selected ? contextCache.isBuilding(selected.workspace) : false },
@@ -1548,13 +1689,56 @@ function registerIpc() {
   registerAction('pilot:new-session', async input => {
     if (typeof input?.workspace !== 'string' || !['chat', 'work'].includes(input?.experience)) throw new Error('Выберите проект и тип новой сессии.');
     if (!store.project(input.workspace)) throw new Error('Выберите активный проект.');
-    if (!await reviewWorkspace(input.workspace, true)) return;
-    const generation = navigationId;
-    await store.select(input.workspace, { isCurrent: () => navigationCurrent(generation) });
-    if (!navigationCurrent(generation)) return;
-    const project = await store.newSession(input.workspace, input.experience);
-    if (!navigationCurrent(generation)) return;
-    startupError = null; void navigate(project, { generation, freshDraft: true });
+    let handoff=null;
+    if(input.experience==='chat'){
+      const authority=projectAutoPlan.state(input.workspace),origin=store.project(input.workspace,authority?.sessionId);
+      if(authority?.enabled&&authority.scopeId&&authority.executionStrategy!=='parallel'
+          &&origin&&!origin.sessionArchivedAt&&!origin.archivedAt){
+        // An explicit new-Chat action revokes the old recipient before any
+        // asynchronous workspace/readiness check or UI navigation can race a Send.
+        const operationId='manual-'+randomUUID();
+        projectAutoPlan.beginHandoff(input.workspace,authority.scopeId,origin.sessionId,{operationId,kind:'manual'});
+        handoff={operationId,origin};
+      }
+    }
+    try {
+      if(handoff)await saveSettings();
+      if (!await reviewWorkspace(input.workspace, true)){
+        if(handoff)projectAutoPlan.failHandoff(input.workspace,handoff.operationId,'ROTATION_HANDOFF_FAILED');
+        return;
+      }
+      const generation = navigationId;
+      await store.select(input.workspace, { isCurrent: () => navigationCurrent(generation) });
+      if (!navigationCurrent(generation)){
+        if(handoff)projectAutoPlan.failHandoff(input.workspace,handoff.operationId,'ROTATION_HANDOFF_FAILED');
+        return;
+      }
+      if(handoff){
+        const checked=await readAutoPlanState(handoff.origin,workspaceSetup.environment);
+        if(!navigationCurrent(generation)||!checked.confirmed||checked.scopeId!==handoff.origin.scopeId
+            ||checked.projectId!==handoff.origin.projectId
+            ||checked.planExecution?.execution_strategy!=='sequential'||checked.scopeStatus!=='ACTIVE')
+          throw Object.assign(new Error('Невозможно подтвердить план перед передачей AutoPlan.'),{code:'ROTATION_PLAN_CHANGED'});
+      }
+      const project = await store.newSession(input.workspace, input.experience);
+      if(handoff){
+        projectAutoPlan.attachHandoff(input.workspace,handoff.operationId,project.sessionId);
+        await saveSettings();
+        const baseline=await readChatSessionTaskProof(project,workspaceSetup.environment);
+        if(!baseline.confirmed||projectAutoPlan.recordTaskProof(project.workspace,project.sessionId,baseline).count!==0)
+          throw Object.assign(new Error('Не удалось подтвердить исходный счётчик нового Chat.'),{code:'ROTATION_BASELINE_UNAVAILABLE'});
+        await saveSettings();
+      }
+      if (!navigationCurrent(generation)){
+        if(handoff)projectAutoPlan.failHandoff(input.workspace,handoff.operationId,'ROTATION_HANDOFF_FAILED');
+        return;
+      }
+      startupError = null;void navigate(project, { generation, freshDraft: true });
+    } catch(error) {
+      if(handoff){projectAutoPlan.failHandoff(input.workspace,handoff.operationId,
+        /^ROTATION_[A-Z_]+$/.test(error.code??'')?error.code:'ROTATION_HANDOFF_FAILED');await saveSettings();}
+      throw error;
+    }
   });
   registerAction('pilot:return-chat', async () => { const current = store.selected(); if (current) await selectWorkspace(current.workspace); }, { navigation: true });
   registerAction('pilot:retry', async () => {
@@ -1674,7 +1858,7 @@ async function createWindow() {
   createStartupFlow();
   registerIpc();
   await sidebar.webContents.loadURL(sidebarUrl);
-  if(!storageError)restoreRotationPages();
+  if(!storageError){await restorePendingHandoffPages();restoreRotationPages();}
   if (startupFlow) void startupFlow.check({ prepare: startupActive });
   if (eventRuntimeChecker) {
     eventRuntimeCheckerTimer = setInterval(checkEventRuntimeState, 2000);

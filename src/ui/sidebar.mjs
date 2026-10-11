@@ -456,6 +456,7 @@ function render(state) {
   $('auto-plan-message').hidden = !autoMessage && !autoSent;
   $('auto-plan-message').textContent = [autoSent, autoMessage].filter(Boolean).join(' ');
   $('auto-plan-message').dataset.reason = auto.reason ?? '';
+  $('auto-plan-message').setAttribute('role',auto.phase==='paused'&&auto.reason?.startsWith('ROTATION_')?'alert':'status');
 
   renderAgentTime(selected);
   const plan = (selected?.planExecution?.execution_strategy==='parallel' ? execution.planView

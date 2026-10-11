@@ -2,6 +2,137 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ProjectAutoPlan } from '../src/project-auto-plan.mjs';
 
+test('T006: durable handoff has no recipient while Recovery is pending and exactly one afterwards',()=>{
+  const sessions=new Set(['old','new','manual']);
+  const owner=()=> 'same-project';
+  const owned=(_w,id)=>sessions.has(id);
+  const auth=new ProjectAutoPlan({identity:owner,ownsSession:owned});
+  auth.sync('/project','scope',{confirmed:true,planRevision:8,originSessionId:'old',executionStrategy:'sequential'});
+  auth.set('/project','scope',true,'old');
+  auth.saveCheckpoint('/project','scope','old',{autoPlanCheckpoint:{version:3,entries:[{status:'sent'}]}});
+  auth.beginHandoff('/project','scope','old',{operationId:'rotation-123',kind:'rotation'});
+  assert.equal(auth.enabled('/project','scope'),true,'global user permission stays ON');
+  assert.equal(auth.state('/project').sessionId,null,'old loses recipient before target is allowed');
+  auth.attachHandoff('/project','rotation-123','new');
+  const reopened=new ProjectAutoPlan({saved:auth.snapshot(),identity:owner,ownsSession:owned});
+  assert.equal(reopened.state('/project').handoff.targetSessionId,'new');
+  assert.equal(reopened.state('/project').sessionId,null);
+  assert.throws(()=>reopened.attachHandoff('/project','rotation-123','manual'),{code:'ROTATION_HANDOFF_CONFLICT'});
+  reopened.finishHandoff('/project','rotation-123','new');
+  assert.equal(reopened.handoffPending('/project'),true,'new recipient cannot send until authority is durable');
+  reopened.releaseHandoff('/project','rotation-123','new');
+  assert.equal(reopened.state('/project').sessionId,'new');
+  assert.equal(reopened.state('/project').enabled,true);
+  assert.equal(reopened.state('/project').handoff.status,'done');
+  assert.equal(reopened.checkpoint('/project','scope','old').autoPlanCheckpoint.entries[0].status,'sent');
+  assert.deepEqual(reopened.checkpoint('/project','scope','new'),{},'new Chat has no old Send ledger');
+  reopened.beginHandoff('/project','scope','new',{operationId:'rotation-456'});
+  reopened.attachHandoff('/project','rotation-456','manual');
+  reopened.finishHandoff('/project','rotation-456','manual');
+  reopened.releaseHandoff('/project','rotation-456','manual');
+  assert.equal(reopened.state('/project').sessionId,'manual','the next quota can hand off again');
+});
+
+test('T006: a failed, unknown or cancelled handoff never transfers authority or alters DONE',()=>{
+  const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:(_w,id)=>['old','new'].includes(id)});
+  auth.sync('/project','scope',{confirmed:true,planRevision:9,executionStrategy:'sequential'});
+  auth.set('/project','scope',true,'old');
+  auth.saveCheckpoint('/project','scope','old',{chatTaskCursor:{counted:[{id:'T001',sha:'a'.repeat(40)}]}});
+  auth.beginHandoff('/project','scope','old',{operationId:'manual-one',kind:'manual'});
+  auth.attachHandoff('/project','manual-one','new');
+  assert.equal(auth.failHandoff('/project','manual-one','ROTATION_RECOVERY_FAILED'),true);
+  assert.equal(auth.failHandoff('/project','manual-one','ROTATION_RECOVERY_FAILED'),false);
+  assert.equal(auth.state('/project').sessionId,null);
+  assert.throws(()=>auth.finishHandoff('/project','manual-one','new'),{code:'ROTATION_HANDOFF_CONFLICT'});
+  const restarted=new ProjectAutoPlan({saved:auth.snapshot(),identity:()=> 'project',ownsSession:()=>true});
+  assert.equal(restarted.state('/project').handoff.status,'failed');
+  assert.equal(restarted.state('/project').handoff.error,'ROTATION_RECOVERY_FAILED');
+  assert.equal(restarted.state('/project').sessionId,null);
+  assert.equal(restarted.checkpoint('/project','scope','old').chatTaskCursor.counted.length,1);
+  restarted.set('/project','scope',false,'old');
+  assert.equal(restarted.enabled('/project','scope'),false);
+  restarted.set('/project','scope',true,'new');
+  assert.equal(restarted.state('/project').sessionId,'new','only a new explicit ON may recover');
+  assert.equal(restarted.state('/project').handoff,null);
+});
+
+test('T006: old controller stays silent while new recovered Chat receives exactly one continuation',async t=>{
+ const {configureProjectAutoPlan}=await import('../src/project-session-auto-plan.mjs');
+ const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:(_w,id)=>['old','new'].includes(id)});
+ const workspace='/handoff-test';const scopeId='scope';
+ const plan={workspace,projectId:'project',scopeId,scopeStatus:'ACTIVE',confirmed:true,planRevision:10,
+   planExecution:{execution_strategy:'sequential'},planView:{tasks:[{id:'T001',status:'done'},{id:'T002',status:'pending'}]}};
+ auth.sync(workspace,scopeId,{confirmed:true,planRevision:10,executionStrategy:'sequential'});
+ auth.set(workspace,scopeId,true,'old');
+ const records={},sends=[];
+ for(const id of ['old','new']){
+  const current={workspace,projectId:'project',sessionId:id,scopeId,experience:'chat',chatUrl:'https://chatgpt.com/c/'+id+'-12345678',planExecution:plan.planExecution};
+  const record={identity:{workspace,sessionId:id},project:()=>current,ready:true,loading:false,cleanups:[],
+    controller:{pending:false,state:{phase:id==='old'?'delivered':'selected'},projectChanged:()=>{}},
+    composer:{inFlight:false,sendUserMessage:async({canContinue,onBeforeSend})=>{
+      if(!canContinue()||!await onBeforeSend())return {state:'cancelled'};
+      sends.push(id);return {state:'sent'};
+    }}};
+  records[id]=record;
+  configureProjectAutoPlan(record,{authorization:auth,store:{inspect:async(_workspace,sessionId)=>({...plan,inspectedSessionId:sessionId})},
+    inspectPlan:async()=>({...plan,inspectedSessionId:id}),onChange:()=>{}});
+  t.after(()=>record.cleanups.forEach(cleanup=>cleanup()));
+ }
+ const observe=id=>records[id].primaryAutomation.observe({documentId:'page-'+id,state:{
+   url:records[id].project().chatUrl,editorAvailable:true,writable:true,busy:false,draftPresent:false,
+   lastMessageRole:'assistant',turnId:'turn-'+id,userTurnId:'user-'+id,manualStopRevision:0,
+   manualInputRevision:0,manualSendRevision:0}});
+ auth.beginHandoff(workspace,scopeId,'old',{operationId:'rotation-test'});
+ auth.attachHandoff(workspace,'rotation-test','new');
+ records.old.primaryAutomation.update();records.new.primaryAutomation.update();
+ observe('old');observe('new');
+ await new Promise(resolve=>setTimeout(resolve,50));
+ assert.deepEqual(sends,[],'neither source nor target can send during pending Recovery');
+ records.new.controller.state.phase='delivered';
+ const page=records.new.primaryAutomation.flow.page;
+ assert.equal((await import('../src/chat-session-rotation.mjs')).chatHandoffDecision({
+   project:{...records.new.project(),attempt:{state:'sent'}},handoff:auth.state(workspace).handoff,
+   phase:'delivered',page}).status,'ready');
+ auth.finishHandoff(workspace,'rotation-test','new');
+ auth.releaseHandoff(workspace,'rotation-test','new');
+ records.old.primaryAutomation.update();records.new.primaryAutomation.update();
+ await records.new.primaryAutomation.flow.planChanged();
+ await new Promise(resolve=>setTimeout(resolve,50));
+ assert.deepEqual(sends,['new']);
+ await Promise.all([records.old.primaryAutomation.flow.planChanged(),records.new.primaryAutomation.flow.planChanged()]);
+ assert.deepEqual(sends,['new'],'no duplicate from second PlanMonitor or old idle pause');
+});
+
+test('T006: manual new Chat revokes an already prepared old Composer before its Send click',async t=>{
+ const {configureProjectAutoPlan}=await import('../src/project-session-auto-plan.mjs');
+ const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:()=>true});
+ auth.sync('/fixture','scope',{confirmed:true,planRevision:3,executionStrategy:'sequential'});
+ auth.set('/fixture','scope',true,'old');
+ const project={workspace:'/fixture',projectId:'project',sessionId:'old',scopeId:'scope',experience:'chat',
+   chatUrl:'https://chatgpt.com/c/old-session',planExecution:{execution_strategy:'sequential'}};
+ const plan={...project,confirmed:true,scopeStatus:'ACTIVE',planRevision:3,
+   planView:{tasks:[{id:'T001',status:'pending'}]}};
+ let release,signal;const gate=new Promise(resolve=>{release=resolve;});
+ const entered=new Promise(resolve=>{signal=resolve;});let sends=0;
+ const record={identity:{workspace:'/fixture',sessionId:'old'},project:()=>project,ready:true,loading:false,cleanups:[],
+   controller:{pending:false,state:{phase:'delivered'},projectChanged:()=>{}},
+   composer:{inFlight:false,sendUserMessage:async({canContinue,onBeforeSend})=>{
+     signal();await gate;
+     if(canContinue()&&await onBeforeSend())sends++;
+     return {state:sends?'sent':'cancelled'};
+   }}};
+ configureProjectAutoPlan(record,{authorization:auth,
+   store:{inspect:async()=>({...plan,inspectedSessionId:'old'})},inspectPlan:async()=>structuredClone(plan),onChange:()=>{}});
+ t.after(()=>{release();record.cleanups.forEach(fn=>fn());});
+ record.primaryAutomation.observe({documentId:'doc',state:{url:project.chatUrl,editorAvailable:true,writable:true,
+   busy:false,draftPresent:false,lastMessageRole:'assistant',turnId:'assistant',userTurnId:'user'}});
+ await Promise.race([entered,new Promise((_,reject)=>setTimeout(()=>reject(Error('Composer not entered')),2000))]);
+ auth.beginHandoff('/fixture','scope','old',{operationId:'manual-click',kind:'manual'});
+ release();await record.primaryAutomation.flow.reconcile();
+ assert.equal(sends,0,'authorization changes before click cannot leak Continue to old Chat');
+ assert.equal(auth.state('/fixture').sessionId,null);
+});
+
 test('Chat task cursor persists by scope and session without changing ON/OFF or recipient',()=>{
  const sessions=new Set(['chat-a','chat-b']);
  const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:(_workspace,id)=>sessions.has(id)});
