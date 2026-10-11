@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1769,
+  "plan_revision": 1771,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -52,7 +52,7 @@
     ]
   },
   "baseline_commit": "a1cd02424932d4666fd43cbcd6a61a7f2d5e2a31",
-  "current_task_id": null,
+  "current_task_id": "T005",
   "context_pack": {
     "documents": [
       {
@@ -247,7 +247,7 @@
       ]
     },
     {
-      "implementation_status": "TODO",
+      "implementation_status": "IN_PROGRESS",
       "commit_status": "PENDING",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -419,8 +419,8 @@
 Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
-Current Task: нет
-Revision: 1769
+Current Task: T005
+Revision: 1771
 
 ## Цель
 
@@ -463,7 +463,7 @@ Revision: 1769
   - Файлы: tests/electron-smoke.mjs, tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, tests/parallel-finalization.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T003
-- [TODO] T005: Зафиксировать версию 0.6.113 и проверки поставки — Ожидает
+- [IN_PROGRESS] T005: Зафиксировать версию 0.6.113 и проверки поставки — В работе
   - Git Commit: [PENDING] chore: prepare 0.6.113 release source and checks
   - Reference: autoplan-lifecycle-recovery-20261011 / T005 / implementation
   - Файлы: package.json, package-lock.json, .harness/workflow.json
