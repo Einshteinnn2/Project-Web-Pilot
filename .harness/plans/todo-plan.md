@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1796,
+  "plan_revision": 1798,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -343,8 +343,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T007",
@@ -386,7 +386,8 @@
         "Полные unit-all и electron-smoke; интеграционные дефекты в пределах явно разрешённых src; более широкий дефект — сначала task:update/amend по Kit."
       ],
       "expected_commit_message": "feat: Проверить полную сквозную ротацию и регрессии",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -577,7 +578,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1796
+Revision: 1798
 
 ## Цель
 
@@ -630,8 +631,8 @@ Revision: 1796
   - Файлы: src/chat-session-rotation.mjs, src/main.mjs, src/project-auto-plan.mjs, src/project-session-auto-plan.mjs, src/context-session.mjs, src/ui/sidebar.mjs, tests/chat-session-rotation.test.mjs, tests/project-auto-plan.test.mjs, tests/context-session.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T005
-- [TODO] T007: Проверить полную сквозную ротацию и регрессии — Ожидает
-  - Git Commit: [PENDING] feat: Проверить полную сквозную ротацию и регрессии
+- [DONE] T007: Проверить полную сквозную ротацию и регрессии — Завершено
+  - Git Commit: [DONE] feat: Проверить полную сквозную ротацию и регрессии
   - Reference: chat-session-rotation-20261011 / T007 / implementation
   - Файлы: tests/electron-smoke.mjs, tests/auto-plan.test.mjs, tests/chat-session-rotation.test.mjs, tests/settings-chat-session-rotation.test.mjs, tests/conversation-recovery.test.mjs, tests/context-session.test.mjs, tests/session-runtime.test.mjs, tests/project-auto-plan.test.mjs, tests/workspace-session.test.mjs, src/chat-session-rotation.mjs, src/main.mjs, src/project-session-auto-plan.mjs, src/context-session.mjs, src/session-runtime.mjs, src/project-auto-plan.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
