@@ -23,7 +23,16 @@
 15. Scope `ACTIVE` и задачи есть → иначе `PLAN_UNAVAILABLE`.
 16. Пауза без native ID в разговоре со старым checkpoint без истории циклов → `LEGACY_PAUSE_UNKNOWN`.
 17. Пауза ещё не использована: запись `sending` → фаза `paused`, `SEND_UNKNOWN`; `sent` → фаза `running`, `PAUSE_CONSUMED`.
-18. Отправка (см. ниже). Технические ожидания пересматриваются по следующему событию.
+18. При Chat и AutoPlan ON последовательного scope — `checkRotation` с Kit/Git proof текущей сессии: `count < chatSessionTaskLimit` → обычная отправка; `count ≥ limit` → сохранить `rotation: reserved` до запуска `onRotation`, старому Chat **не отправлять**; неверные/неподтверждённые данные → `ROTATION_PROOF_ERROR`, ожидание без Send. Полный DONE всегда завершает план без ротации. Для Work/parallel этот шаг отсутствует.
+19. Отправка (см. ниже). Технические ожидания пересматриваются по следующему событию.
+
+### Ротация, предварительный Send и сохранение права
+
+`chat-session-rotation.mjs` проверяет подтверждённые Kit DONE, включая DOCS/delivery, и хранит `chatTaskCursor` (baseline/HEAD, taskId/SHA, revision) отдельно для каждого Chat в projectAutoPlan. Счёт не зависит от текста ответа или события PlanMonitor, сохраняется при OFF→ON и restart. Предыдущие DONE становятся baseline нового Chat. Числовой лимит 1–10 (default 4) задаётся в Settings, не включает AutoPlan и действует только при последовательном Chat. Нельзя считать внешние/сомнительные Git-коммиты выполненными задачами своего Chat; отказ fail-closed.
+
+Порог проверяется **дважды**: на пригодной idle-паузе и в `onBeforeSend` прямо перед click. `rotation` сохраняется в `autoPlanCheckpoint` до нового Chat (`reserved → notified`); повторные события, reload и UNKNOWN не вызывают второй `onRotation`. Отправка из старого Composer дополнительно сверяет, остаётся ли `ProjectAutoPlan.sessionId` прежним получателем: ручной новый Chat может отозвать это право даже после вставки текста. Если callback перехода недоступен — `ROTATION_HANDLER_UNAVAILABLE`; если нельзя записать checkpoint — `ROTATION_CHECKPOINT_ERROR`; если исход передачи неизвестен — `ROTATION_HANDOFF_ERROR`/`ROTATION_UNKNOWN` без автоповтора. ON кнопки сохраняется, но продолжение заблокировано.
+
+`ProjectAutoPlan.handoff` (`waiting|done|failed`) сначала лишает старую сессию права (`sessionId=null`), сохраняет точный `operationId/source/target`, затем проверяет подтверждённый Recovery с постоянным URL и окончанием **собственного** ответа assistant нового Chat. Только после проверки scope/Kit, Stop/Send/черновика и записи нового recipient в settings.json новая сессия получает единственное «Продолжай». У `done` перенос завершён, у `failed` UI показывает код; ручное действие требуется для восстановления, без возврата прав старому Chat и без повтора пакета. Work/parallel и простое выделение существующего Chat не используют handoff. Подробнее: [AutoPlan](auto-plan.md), [контекст](context-delivery.md), [сессии](workspace-sessions.md).
 
 ### Проверка плана (`readAutoPlanState`)
 

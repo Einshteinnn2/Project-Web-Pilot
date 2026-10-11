@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1804,
+  "plan_revision": 1806,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -72,7 +72,7 @@
       {
         "path": "docs/planning/chat-session-rotation-spec.md",
         "required": true,
-        "revision": "WORKTREE"
+        "revision": "16c4bf9852d901720d7cbb73b1cd790771c35ffb"
       }
     ],
     "include_last_completed_task": false,
@@ -473,8 +473,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "DOCS",
@@ -513,7 +513,19 @@
         "Контракты соответствуют 0.6.114; требования рабочей spec перенесены в действующие docs, временная spec удалена по Workflow Core; до delivery."
       ],
       "expected_commit_message": "docs: актуализировать ротацию Chat",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "README.md",
+        "docs/architecture/OVERVIEW.md",
+        "docs/modules/auto-plan.md",
+        "docs/modules/auto-plan-send.md",
+        "docs/modules/context-delivery.md",
+        "docs/modules/workspace-sessions.md",
+        "docs/modules/session-runtime.md",
+        "docs/modules/workspace-sidebar-ui.md",
+        "docs/modules/release.md",
+        "docs/planning/chat-session-rotation-spec.md"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -625,7 +637,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1804
+Revision: 1806
 
 ## Цель
 
@@ -696,8 +708,8 @@ Revision: 1804
   - Файлы: package.json, package-lock.json, .harness/workflow.json, scripts/check-installed-release.mjs, scripts/check-github-release.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T007, T007A
-- [TODO] DOCS: Актуализация всех документов проекта — Ожидает
-  - Git Commit: [PENDING] docs: актуализировать ротацию Chat
+- [DONE] DOCS: Актуализация всех документов проекта — Завершено
+  - Git Commit: [DONE] docs: актуализировать ротацию Chat
   - Reference: chat-session-rotation-20261011 / DOCS / implementation
   - Файлы: docs/planning/chat-session-rotation-spec.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/context-delivery.md, docs/modules/workspace-sessions.md, docs/modules/session-runtime.md, docs/modules/workspace-sidebar-ui.md, docs/architecture/OVERVIEW.md, README.md, docs/modules/release.md
   - Параллельность: исключительное выполнение

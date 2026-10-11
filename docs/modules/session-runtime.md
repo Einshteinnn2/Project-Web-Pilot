@@ -16,6 +16,12 @@ release без force отказывает при busy, pending-доставке 
 
 AgentTimer остаётся у своей страницы. ExecutorTimer сохраняет activeMs/waitingMs назначений — [parallel-execution](parallel-execution.md). Каждый основной runtime имеет AutoPlan/AutomationSendState/PlanMonitor через project-session-auto-plan; адрес отправки — record.project(), Composer и Session ID своей страницы, включая скрытую. Разрешения и журналы — [AutoPlan](auto-plan.md).
 
+### Автоматическая новая Chat-сессия после лимита задач (0.6.114)
+
+`SessionRuntimes.openRotationChat(project)` создаёт **отдельный** WebContentsView/ContextSession/PageState/AutoPlan для уже сохранённой Chat-сессии с `rotation.id`, проверяет readiness и загружает сохранённый `chatUrl` либо Chat entrypoint. Повторный вызов не создаёт второе представление и не выполняет повторный Send. Скрытый проект запускает собственную страницу, но **не** переключает глобально видимый проект и BaseWindow. Только project `selectedSessionId` становится новым; текущие страницы других проектов продолжают работу.
+
+Стабильный `rotationOperationId` и целевой Session ID сохраняются в `workspaces.json`; собственный `chatTaskCursor` и handoff recipient — в `settings.json`. При restart программа восстанавливает существующую цель и, если необходимо, связывает её по operation ID; не создаёт новый Chat для того же SHA. `ContextSession` наблюдает persisted `prepared/sending/sent/unknown`, **не переигрывая попытку**. После Recovery delivered и первого idle-ответа assistant Web Pilot сохраняет право нового адресата и только затем разрешает следующее «Продолжай». Ошибка readiness, URL, attach, Send UNKNOWN, остановка пользователя или несогласованная запись переводят handoff в `failed` с видимой причиной, без дублирования пакета и без потери Kit DONE. Последняя задача плана не вызывает ротацию. Контракты: [AutoPlan](auto-plan.md), [доставка](context-delivery.md), [сессии](workspace-sessions.md).
+
 ## Восстановление разговора
 
 ConversationRecovery реагирует на видимый alert/Retry error UI, а не текст сообщения: stream recovery timed out, Resume stream unavailable, network error/connection lost на поддержанных EN/RU вариантах. Долгое ожидание/STALL_WARNING не запускают восстановление.
@@ -39,3 +45,5 @@ Checkpoint conversationRecovery={key,used,cooldownUntil,stoppedAt} сохран�
 Electron smoke запускает настоящий main со старым глобальным AutoPlan ON в свежем временном профиле до окна/страницы; проверяет открытие панели и миграцию в OFF. Пользовательские данные не используются.
 
 Unit покрывает адресацию, независимость страниц, смену представления без пересоздания, отказ release при работе, позднюю навигацию, recovery и фоновую очередь. Electron TEST FIXTURE проверяет отдельные WebContents и события скрытых страниц. Живые Chat/Work и native Windows принимает пользователь.
+
+Electron TEST FIXTURE версии 0.6.114 дополнительно выполняет N=1/N=4 с реальными Kit/Git DONE, фоновую ротацию без смены видимого проекта, доставку четырёх Recovery-вложений и единственное продолжение в новой странице; native Windows, чистая установка и живой ChatGPT проверяются пользователем отдельно.
