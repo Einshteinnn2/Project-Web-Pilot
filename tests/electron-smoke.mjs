@@ -1521,24 +1521,37 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     'manual rename updates local and native titles together', snapshot);
   assert.equal(store.selected().titleSource, 'manual');
 
-  // T001 recovery characterization: partial ACTIVE plan, OFF, newly delivered
-  // Work Recovery, assistant already idle, ONE sidebar click. The assertion
-  // for T003 is exactly one Send addressed to this new conversation (and none
-  // to the previous chat); do not silently fix it with another OFF -> ON.
+  // T003: partially DONE, OFF, recovered Work already idle. The first ON is
+  // deliberately concurrent with a Review-unconfirmed plan inspection; when
+  // publication becomes trusted, its original click must wake exactly once.
   const recoveryBefore = await countMessages();
   await beginAnswer();
   await endAnswer('Recovery прочитан. Готов продолжать существующий план.');
   await waitFor(() => !pageState.current?.state.busy && pageState.current?.state.lastMessageRole === 'assistant',
     'recovered Work has an idle assistant answer', snapshot);
+  const beforeRecoveryReview=await fs.readFile(reviewStateFile).catch(error=>error.code==='ENOENT'?null:Promise.reject(error));
+  await fs.mkdir(path.dirname(reviewStateFile),{recursive:true});
+  await fs.writeFile(reviewStateFile,JSON.stringify({version:1,enabled:true,stage:'RUNNING',generation:10,
+    round:1,scope_id:'fixture-current-plan'}));
   await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').click()");
   await waitFor(() => savedAutoState().then(state => state.autoPlanEnabled),
-    'one explicit ON after recovered Work answer', snapshot);
+    'one explicit ON during blocked recovered Work answer', snapshot);
   const recoveredOnce = await characterizeAutoPlan('recovered-Work-after-one-ON');
-  await new Promise(resolve => setTimeout(resolve, 750));
+  assert.equal(recoveredOnce.persistedScope,'fixture-current-plan','Review cannot erase known ACTIVE scope');
+  assert.equal(recoveredOnce.recipient,currentWork.sessionId,'new recovered Work owns sequential continuation');
+  assert.equal(recoveredOnce.persistedON,true,'unconfirmed ON persists');
+  assert.equal(recoveredOnce.controllerON,true,'controller remains ON while the plan is unconfirmed');
+  await noExtraSend(recoveryBefore);
+  assert.equal(await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').getAttribute('aria-pressed')"),
+    'true','blocked wait does not disguise ON as OFF');
+  if(beforeRecoveryReview)await fs.writeFile(reviewStateFile,beforeRecoveryReview);
+  else await fs.writeFile(reviewStateFile,JSON.stringify({version:1,enabled:false,stage:'PUBLISHED',generation:11,round:1,
+    scope_id:'fixture-current-plan'}));
+  await expectContinue(recoveryBefore,'Review publication wakes recovered Work without a second ON');
   const recoveredSends = await countMessages() - recoveryBefore;
   await characterizeAutoPlan('recovered-Work-settled-without-second-click');
   assert.equal(recoveredSends, 1,
-    'T001 CONTROL: verified ACTIVE + already idle Recovery does send once after one ON');
+    'T003: one ON during unconfirmed plan eventually sends exactly once');
   assert.equal(recoveredOnce.recipient, currentWork.sessionId,
     'the recovered Work, not the previous main chat, receives the authorization');
   assert.equal(recoveredOnce.persistedON, true, 'recovery ON is persisted for the selected project');

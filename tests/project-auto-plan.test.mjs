@@ -188,11 +188,9 @@ test('T001 boundary: OFF and recovered-session ON transfer one project permissio
  // T003 must prove the click also wakes the new live runtime via sidebar IPC.
 });
 
-test('T001 CURRENT race: recovered ON during an unconfirmed plan read strands the previous ACTIVE scope',()=>{
- // Reproduce the exact authorization calls made by pilot:auto-plan when a
- // transient read returns unconfirmed: sync(null) followed by set(null, ON).
- // This is a characterization, NOT a desired assertion. T003 must keep the
- // known unfinished scope and transfer the recipient to the recovered chat.
+test('T003: ON during an unconfirmed plan read retains ACTIVE identity and checkpoint on recovered main',()=>{
+ // The same unconfirmed IPC path previously replaced a confirmed ACTIVE
+ // scope with awaitingPlan and then could not rebind previousScopeId.
  const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:()=>true});
  auth.set('/fixture','partial',true,'previous');
  auth.sync('/fixture','partial',{confirmed:true,planRevision:42,originSessionId:'previous'});
@@ -201,16 +199,69 @@ test('T001 CURRENT race: recovered ON during an unconfirmed plan read strands th
    key:JSON.stringify(['/fixture','previous','partial','https://chatgpt.com/c/previous']),
    turnId:'already-sent',status:'sent'}]}});
  auth.sync('/fixture',null,{confirmed:false});
- auth.set('/fixture',null,true,'recovered');
+ auth.setWhileUnconfirmed('/fixture',true,'recovered');
  assert.deepEqual({scope:auth.state('/fixture').scopeId,awaiting:auth.state('/fixture').awaitingPlan,
    recipient:auth.state('/fixture').sessionId},
-   {scope:'',awaiting:true,recipient:'recovered'},'T001 CURRENT: uncertain read turns recovered ON into pre-plan wait');
+   {scope:'partial',awaiting:undefined,recipient:'recovered'},'unconfirmed read retains last trusted ACTIVE scope');
  auth.sync('/fixture','partial',{confirmed:true,planRevision:43,originSessionId:'previous'});
- assert.equal(auth.state('/fixture').scopeId,'',
-   'T001 CURRENT: previousScopeId blocks rebinding to same partial plan; T003 must retain ACTIVE');
- assert.equal(auth.enabled('/fixture','partial'),false,'a recovered idle chat cannot send while stranded');
- assert.equal(auth.checkpoint('/fixture','partial','previous').autoPlanCheckpoint,undefined,
-   'T001 CURRENT: changing scope loses the old scoped checkpoint lookup');
+ assert.equal(auth.state('/fixture').scopeId,'partial');
+ assert.equal(auth.state('/fixture').sessionId,'recovered','stale origin may not reassign an existing scope');
+ assert.equal(auth.enabled('/fixture','partial'),true);
+ assert.equal(auth.checkpoint('/fixture','partial','previous').autoPlanCheckpoint.entries[0].status,'sent');
+ auth.setWhileUnconfirmed('/fixture',false,'recovered');
+ assert.equal(auth.state('/fixture').offReason,'manual');
+ assert.equal(auth.enabled('/fixture','partial'),false);
+ auth.setWhileUnconfirmed('/fixture',true,'recovered');
+ assert.equal(auth.state('/fixture').sessionId,'recovered');
+ assert.equal(auth.checkpoint('/fixture','partial','previous').autoPlanCheckpoint.entries.length,1);
+ const restarted=new ProjectAutoPlan({saved:auth.snapshot(),identity:()=> 'project',ownsSession:()=>true});
+ assert.equal(restarted.enabled('/fixture','partial'),true);
+ assert.equal(restarted.state('/fixture').sessionId,'recovered');
+});
+
+test('T003: incomplete reads cannot resurrect completed scope or import another project permission',()=>{
+ let projectId='one';
+ const auth=new ProjectAutoPlan({identity:()=>projectId,ownsSession:()=>true});
+ auth.set('/fixture','done',true,'old');
+ auth.sync('/fixture','done',{confirmed:true,planRevision:44,complete:true});
+ auth.setWhileUnconfirmed('/fixture',true,'recovered');
+ assert.equal(auth.state('/fixture').scopeId,'');
+ assert.equal(auth.state('/fixture').awaitingPlan,true);
+ auth.sync('/fixture','done',{confirmed:true,planRevision:44});
+ assert.equal(auth.state('/fixture').scopeId,'','the previous confirmed completed scope is not rearmed');
+ projectId='two';
+ const restored=new ProjectAutoPlan({saved:auth.snapshot(),identity:()=>projectId,ownsSession:()=>false});
+ assert.equal(restored.enabled('/fixture',null),false);
+ assert.deepEqual(restored.checkpoint('/fixture','done','old'),{});
+});
+
+test('T003: unconfirmed parallel ON cannot transfer the published main origin',()=>{
+ const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:()=>true});
+ auth.sync('/fixture','parallel-scope',{confirmed:true,planRevision:17,originSessionId:'main',executionStrategy:'parallel'});
+ auth.set('/fixture','parallel-scope',true,'main');
+ auth.set('/fixture','parallel-scope',false,'main');
+ const restored=new ProjectAutoPlan({saved:auth.snapshot(),identity:()=> 'project',ownsSession:()=>true});
+ assert.equal(restored.state('/fixture').executionStrategy,'parallel');
+ restored.setWhileUnconfirmed('/fixture',true,'new-chat');
+ assert.equal(restored.state('/fixture').sessionId,'main');
+ assert.equal(restored.enabled('/fixture','parallel-scope'),true);
+ restored.sync('/fixture',null,{confirmed:false});
+ assert.equal(restored.state('/fixture').sessionId,'main');
+});
+
+test('T003: trustworthy NONE after an archived scope can arm a fresh first plan',()=>{
+ const auth=new ProjectAutoPlan();
+ auth.set('/fixture','old-scope',true,'main');
+ auth.sync('/fixture','old-scope',{confirmed:true,planRevision:100,executionStrategy:'sequential'});
+ auth.set('/fixture','old-scope',false,'main');
+ // A separately verified NONE calls set(null) at IPC, not the unconfirmed path.
+ auth.set('/fixture',null,true,'new-chat');
+ assert.equal(auth.state('/fixture').awaitingPlan,true);
+ auth.sync('/fixture','new-scope',{confirmed:true,planRevision:1,originSessionId:'new-chat',executionStrategy:'sequential'});
+ assert.equal(auth.enabled('/fixture','new-scope'),true);
+ assert.equal(auth.state('/fixture').sessionId,'new-chat');
+ auth.sync('/fixture','old-scope',{confirmed:true,planRevision:100});
+ assert.equal(auth.state('/fixture').scopeId,'new-scope');
 });
 
 test('A01/A02/A04/A06: two main monitors in one project send only from plan origin despite stale/error, then OFF',async t=>{

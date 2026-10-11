@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1765,
+  "plan_revision": 1767,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -161,8 +161,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T003",
@@ -178,7 +178,9 @@
         "src/session-runtime.mjs",
         "src/plan-monitor.mjs",
         "tests/project-auto-plan.test.mjs",
-        "tests/auto-plan.test.mjs"
+        "tests/auto-plan.test.mjs",
+        "src/project-auto-plan.mjs",
+        "tests/electron-smoke.mjs"
       ],
       "documentation_paths": [],
       "verification_ids": [
@@ -194,7 +196,15 @@
         "Нет повторного Send после sent/UNKNOWN, при ручном Stop/Send, черновике, транзакции, активном Review и после выключения; параллельный origin не перехватывается."
       ],
       "expected_commit_message": "fix: wake AutoPlan in recovered session on first authorization",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "src/main.mjs",
+        "src/project-auto-plan.mjs",
+        "src/project-session-auto-plan.mjs",
+        "tests/auto-plan.test.mjs",
+        "tests/electron-smoke.mjs",
+        "tests/project-auto-plan.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -404,7 +414,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1765
+Revision: 1767
 
 ## Цель
 
@@ -435,10 +445,10 @@ Revision: 1765
   - Файлы: src/project-auto-plan.mjs, src/project-session-auto-plan.mjs, src/main.mjs, tests/project-auto-plan.test.mjs, tests/electron-smoke.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T001
-- [TODO] T003: Возобновлять частично выполненный план после Recovery одним ON — Ожидает
-  - Git Commit: [PENDING] fix: wake AutoPlan in recovered session on first authorization
+- [DONE] T003: Возобновлять частично выполненный план после Recovery одним ON — Завершено
+  - Git Commit: [DONE] fix: wake AutoPlan in recovered session on first authorization
   - Reference: autoplan-lifecycle-recovery-20261011 / T003 / implementation
-  - Файлы: src/project-session-auto-plan.mjs, src/auto-plan.mjs, src/main.mjs, src/session-runtime.mjs, src/plan-monitor.mjs, tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs
+  - Файлы: src/project-session-auto-plan.mjs, src/auto-plan.mjs, src/main.mjs, src/session-runtime.mjs, src/plan-monitor.mjs, tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, src/project-auto-plan.mjs, tests/electron-smoke.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T002
 - [TODO] T004: Завершить сквозную матрицу AutoPlan и регрессию смежных сценариев — Ожидает

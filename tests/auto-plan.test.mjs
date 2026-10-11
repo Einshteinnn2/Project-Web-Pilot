@@ -128,6 +128,25 @@ test('an enabled idle client wakes when its first plan appears', async () => {
   f.setScope('scope'); await f.flow.planChanged(); await f.drain();
   assert.deepEqual(f.sends, ['Продолжай']);
 });
+test('T003: one ON before recovered history is ready wakes through busy, hydration and draft without a second toggle',async()=>{
+  const f=fixture({turnId:''});
+  f.observe({lastMessageRole:null,editorAvailable:false});
+  await f.flow.start();
+  assert.equal(f.flow.view().enabled,true);
+  assert.deepEqual(f.sends,[]);
+  f.observe({lastMessageRole:'user',editorAvailable:true,busy:true});
+  await f.drain();assert.deepEqual(f.sends,[],'busy Recovery is not an idle pause');
+  f.observe({busy:false,lastMessageRole:'assistant',turnId:'recovery-answer',draftPresent:true});
+  await f.drain();
+  assert.equal(f.flow.view().reason,'DRAFT_PRESENT');
+  assert.deepEqual(f.sends,[],'draft remains untouched');
+  f.observe({draftPresent:false});await f.drain();
+  assert.equal(f.sends.length,1,'clearing the draft wakes the same recovered pause');
+  const saved=f.flow.checkpointState();
+  f.flow.dispose();f.flow.restore(true,saved);
+  await f.flow.recover();await f.flow.planChanged();
+  assert.equal(f.sends.length,1,'restarting and duplicate plan events never reuse a sent recovery pause');
+});
 test('completed, empty, inactive, unconfirmed, mismatched and OFF plans never send', async () => {
   for (const kind of ['done', 'empty', 'blocked', 'transaction', 'mismatch', 'off']) {
     const f = fixture();

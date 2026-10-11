@@ -242,7 +242,7 @@ authorizedExecutionKit.read=async workspace=>{
   const facts=await executionKit.read(workspace),plan=facts.plan;
   if(plan.execution_strategy==='parallel'&&facts.confirmed&&plan.execution_scope_status==='ACTIVE')
     projectAutoPlan.sync(workspace,plan.scope_id,{confirmed:true,planRevision:plan.plan_revision,
-      originSessionId:plan.execution_origin_session_id});
+      originSessionId:plan.execution_origin_session_id,executionStrategy:'parallel'});
   return facts;
 };
 store.git=(workspace,args)=>executionKit.git(workspace,['--no-optional-locks',...args]);
@@ -1156,8 +1156,10 @@ function registerIpc() {
       if(enabled===true)throw new Error('Выберите проект для автовыполнения.');
       return; // Closing an unselected/legacy OFF state is a harmless no-op.
     }
-    const info=project&&await readAutoPlanState(project,workspaceSetup.environment);
-    let verified=info?.confirmed===true;
+    // A failed or unconfirmed read must block Send, not discard the explicit
+    // project permission or its last confirmed scope/checkpoints.
+    const info=await readAutoPlanState(project,workspaceSetup.environment).catch(()=>null);
+    let verified=info?.confirmed===true&&info.workspace===workspace&&info.projectId===project.projectId;
     if(info?.scopeId&&info.planExecution?.execution_strategy==='parallel'){
       const kit=await executionKit.read(workspace);
       verified=kit.confirmed&&kit.plan.project_id===info.projectId
@@ -1168,16 +1170,30 @@ function registerIpc() {
       throw new Error('Выбранный проект или сессия изменились во время проверки. Повторите переключение.');
     const scope=verified?info.scopeId:null;
     const done=verified&&info.planView?.tasks?.length>0&&info.planView.tasks.every(t=>t.status==='done');
-    projectAutoPlan.sync(workspace,scope,{confirmed:verified,complete:done,
-      planRevision:info?.planRevision,originSessionId:info?.planExecution?.execution_origin_session_id});
+    if(verified)projectAutoPlan.sync(workspace,scope,{confirmed:true,complete:done,
+      planRevision:info.planRevision,originSessionId:info.planExecution?.execution_origin_session_id,
+      executionStrategy:info.planExecution?.execution_strategy??null});
     const current=projectAutoPlan.state(workspace);
     if(scope&&current?.scopeId!==scope&&enabled===true)
       throw new Error('План изменился во время переключения AutoPlan. Обновите состояние проекта.');
     // Completion is an automatic OFF, never misrecord it as a manual OFF.
-    if(!(done&&enabled===true))projectAutoPlan.set(workspace,
-      scope&&current?.scopeId!==scope?current.scopeId:scope,enabled===true,project?.sessionId);
+    if(!(done&&enabled===true)){
+      if(scope)projectAutoPlan.set(workspace,scope,enabled===true,
+        info.planExecution?.execution_strategy==='parallel'
+          ?info.planExecution.execution_origin_session_id??null:project.sessionId);
+      else if(verified&&info.scopeStatus==='NONE')
+        projectAutoPlan.set(workspace,null,enabled===true,project.sessionId);
+      else projectAutoPlan.setWhileUnconfirmed(workspace,enabled===true,project.sessionId);
+    }
     if(workspace)execution.observe(workspace);
     await saveSettings();
+    // ON on an already idle Recovery pause must be an event in its own right;
+    // it cannot depend on a second click or another DOM/PlanMonitor event.
+    if(enabled===true&&!(done&&enabled===true)){
+      const record=liveRecord(store.project(workspace,project.sessionId));
+      record?.primaryAutomation?.update();
+      void record?.primaryAutomation?.flow.planChanged();
+    }
   });
   registerAction('pilot:plan-review', input => planReview.setEnabled(input));
   registerAction('pilot:acknowledge-command', async input => {

@@ -7,7 +7,8 @@ export class ProjectAutoPlan {
       if(value&&typeof value.scopeId==='string'&&value.sessions&&typeof value.sessions==='object'&&!Array.isArray(value.sessions))
         this.book[workspace]={projectId:value.projectId??null,scopeId:value.scopeId,enabled:value.enabled===true,sessionId:typeof value.sessionId==='string'?value.sessionId:null,sessions:structuredClone(value.sessions),awaitingPlan:value.scopeId===''&&value.awaitingPlan===true,offReason:value.offReason??null,
           planRevision:Number.isSafeInteger(value.planRevision)?value.planRevision:null,
-          previousScopeId:typeof value.previousScopeId==='string'?value.previousScopeId:null};
+          previousScopeId:typeof value.previousScopeId==='string'?value.previousScopeId:null,
+          executionStrategy:['parallel','sequential'].includes(value.executionStrategy)?value.executionStrategy:null};
     }
   }
   state(workspace){
@@ -22,7 +23,7 @@ export class ProjectAutoPlan {
   }
   enabled(workspace,scopeId){const state=this.state(workspace);return !!state&&state.scopeId===(scopeId??'')&&state.enabled===true&&(!!scopeId||state.awaitingPlan===true);}
   finalizationAllowed(workspace,scopeId){const state=this.state(workspace);return !!state&&state.scopeId===scopeId&&(state.enabled||state.offReason==='complete');}
-  sync(workspace,scopeId,{complete=false,confirmed=false,planRevision=null,originSessionId=null}={}) {
+  sync(workspace,scopeId,{complete=false,confirmed=false,planRevision=null,originSessionId=null,executionStrategy=null}={}) {
     if(!workspace||(this.identity&&!this.identity(workspace)))return false;
     const old=this.state(workspace);
     // NONE, a failed read, or an unconfirmed/stale projection cannot revoke an
@@ -43,11 +44,16 @@ export class ProjectAutoPlan {
       const recipient=originSessionId!==null?(this.ownsSession(workspace,originSessionId)?originSessionId:null):old?.sessionId??null;
       this.book[workspace]={projectId:this.identity?.(workspace)??null,scopeId,enabled:inherited,
         sessionId:inherited?recipient:null,offReason:null,planRevision:revision,
-        previousScopeId:(old?.scopeId||old?.previousScopeId)??null,sessions:Object.fromEntries(Object.entries(old?.sessions??{})
+        previousScopeId:(old?.scopeId||old?.previousScopeId)??null,
+        executionStrategy:['parallel','sequential'].includes(executionStrategy)?executionStrategy:null,
+        sessions:Object.fromEntries(Object.entries(old?.sessions??{})
           .filter(([,entry])=>entry.automationCheckpoint).map(([id,entry])=>[id,{automationCheckpoint:entry.automationCheckpoint}]))};
       this.onChange(workspace);
     }
     const state=this.state(workspace);
+    if(!state.executionStrategy&&['parallel','sequential'].includes(executionStrategy)){
+      state.executionStrategy=executionStrategy;this.onChange(workspace);
+    }
     if(revision!==null&&(state.planRevision===null||revision>state.planRevision)){
       state.planRevision=revision;this.onChange(workspace);
     }
@@ -62,6 +68,15 @@ export class ProjectAutoPlan {
     this.sync(workspace,scopeId,{confirmed:true});const state=this.state(workspace);
     const reason=choice?null:'manual';
     if(state.enabled!==(choice===true)||state.offReason!==reason||(choice&&sessionId&&state.sessionId!==sessionId)){state.enabled=choice===true;state.offReason=reason;if(choice&&sessionId)state.sessionId=sessionId;this.onChange(workspace);}return state.enabled;
+  }
+  // A transient read error, Review transaction or stale NONE is not evidence
+  // that a previously confirmed unfinished scope has disappeared. Explicit
+  // ON/OFF can still transfer its recipient, without replacing its ledger or
+  // turning a completed scope into an executable one.
+  setWhileUnconfirmed(workspace,choice,sessionId=null){
+    const previous=this.state(workspace);
+    const scope=previous?.scopeId && previous.offReason!=='complete' ? previous.scopeId : null;
+    return this.set(workspace,scope,choice,previous?.executionStrategy==='parallel'?null:sessionId);
   }
   checkpoint(workspace,scopeId,sessionId){return this.state(workspace)&&this.state(workspace).scopeId===scopeId?this.state(workspace).sessions[sessionId]??{}:{};}
   saveCheckpoint(workspace,scopeId,sessionId,patch) {

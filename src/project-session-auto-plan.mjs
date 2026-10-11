@@ -52,7 +52,8 @@ export function configureProjectAutoPlan(record,{store,authorization,inspectPlan
           &&checked.projectId===p.projectId&&typeof checked.scopeId==='string'&&!!checked.scopeId
           &&Number.isSafeInteger(checked.planRevision);
         if(trusted)authorization.sync(p.workspace,checked.scopeId,{confirmed:true,planRevision:checked.planRevision,
-          originSessionId:checked.planExecution?.execution_origin_session_id??null});
+          originSessionId:checked.planExecution?.execution_origin_session_id??null,
+          executionStrategy:checked.planExecution?.execution_strategy??null});
         const done=checked.confirmed&&checked.planView?.tasks?.length>0&&checked.planView.tasks.every(t=>t.status==='done');
         if(trusted&&done&&authorization.state(p.workspace)?.scopeId===checked.scopeId
           &&authorization.state(p.workspace)?.planRevision===checked.planRevision){
