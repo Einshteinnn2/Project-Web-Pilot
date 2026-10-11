@@ -60,7 +60,7 @@
         "run",
         "build"
       ],
-      "evidence": "~/Downloads/WebPilot-0.6.111: macOS arm64 и Windows x64, два ZIP + Windows-runtime + SHA256SUMS.txt + INSTALL.txt + release-manifest.json; sourceCommit, подпись и bundled Workflow Kit 1.7.2 проверены. Единственную сборку выполняет paired-release при коммите T010 после T007 и DOCS-2"
+      "evidence": "~/Downloads/WebPilot-0.6.112: macOS arm64 и Windows x64, два ZIP + Windows-runtime + SHA256SUMS.txt + INSTALL.txt + release-manifest.json; sourceCommit, подпись и bundled Workflow Kit 1.7.2 проверены. Единственную сборку выполняет paired-release при коммите T007 после T006 и DOCS"
     },
     {
       "required": false,
@@ -71,7 +71,7 @@
       "args": [
         "scripts/check-installed-release.mjs"
       ],
-      "evidence": "0.6.111, Workflow Kit 1.7.2: установка из готового staging без пересборки; сохранённые app identity/signature и контроль manifest"
+      "evidence": "0.6.112, Workflow Kit 1.7.2: установка из готового staging без пересборки; сохранённые app identity/signature и контроль manifest"
     },
     {
       "required": false,
@@ -82,7 +82,7 @@
       "args": [
         "scripts/check-github-release.mjs"
       ],
-      "evidence": "GitHub Release v0.6.111 и Workflow Kit 1.7.2: remote main, tag на sourceCommit, ровно шесть assets и digest сверены с manifest без пересборки"
+      "evidence": "GitHub Release v0.6.112 и Workflow Kit 1.7.2: remote main, tag на sourceCommit, ровно шесть assets и digest сверены с manifest без пересборки"
     },
     {
       "required": false,
@@ -134,9 +134,9 @@
       "executable": "node",
       "args": [
         "-e",
-        "const fs=require(\"node:fs\");const p=JSON.parse(fs.readFileSync(\"package.json\"));const l=JSON.parse(fs.readFileSync(\"package-lock.json\"));const k=JSON.parse(fs.readFileSync(\"packages/workflow-kit/package.json\"));if(p.version!==\"0.6.111\"||l.version!==p.version||l.packages[\"\"].version!==p.version||k.version!==\"1.7.2\")process.exit(1);console.log(\"Release source 0.6.111 and Workflow Kit 1.7.2 coherent\");"
+        "const fs=require(\"node:fs\");const p=JSON.parse(fs.readFileSync(\"package.json\"));const l=JSON.parse(fs.readFileSync(\"package-lock.json\"));const k=JSON.parse(fs.readFileSync(\"packages/workflow-kit/package.json\"));if(p.version!==\"0.6.112\"||l.version!==p.version||l.packages[\"\"].version!==p.version||k.version!==\"1.7.2\")process.exit(1);console.log(\"Release source 0.6.112 and Workflow Kit 1.7.2 coherent\");"
       ],
-      "evidence": "Version source preflight: package.json / package-lock.json = 0.6.111; Workflow Kit 1.7.2, no assembly; paired-release runs separately only after this version is committed"
+      "evidence": "Version source preflight: package.json / package-lock.json = 0.6.112; Workflow Kit 1.7.2, no assembly; paired-release runs separately only after this version is committed"
     }
   ],
   "budget": {
