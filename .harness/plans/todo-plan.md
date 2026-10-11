@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1754,
+  "plan_revision": 1756,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -418,8 +418,8 @@
       "actual_files": []
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T008",
@@ -445,7 +445,8 @@
         "Работающий экземпляр не перезапускается принудительно; требуется пользовательская живая приёмка после полного выхода."
       ],
       "expected_commit_message": "release: установить готовый выпуск 0.6.112",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -501,7 +502,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1754
+Revision: 1756
 
 ## Цель
 
@@ -568,8 +569,8 @@ Revision: 1754
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
   - Зависимости: T006, DOCS
-- [TODO] T008: Установить готовый macOS выпуск без пересборки — Ожидает
-  - Git Commit: [PENDING] release: установить готовый выпуск 0.6.112
+- [DONE] T008: Установить готовый macOS выпуск без пересборки — Завершено
+  - Git Commit: [DONE] release: установить готовый выпуск 0.6.112
   - Reference: archive-deletion-recovery-20261011 / T008 / implementation
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
