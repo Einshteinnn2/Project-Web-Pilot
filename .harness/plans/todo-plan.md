@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1788,
+  "plan_revision": 1790,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -157,8 +157,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T003",
@@ -188,7 +188,15 @@
         "Baseline=0 для нового Chat; только подтверждённые task DONE с Git proof от baseline; все типы задач включая DOCS/delivery; restart, двух PlanMonitor и OFF→ON без переучёта; ambiguous external fail closed."
       ],
       "expected_commit_message": "feat: Реализовать устойчивый счёт подтверждённых DONE для Chat",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "docs/planning/chat-session-rotation-spec.md",
+        "src/auto-plan-state.mjs",
+        "src/chat-session-rotation.mjs",
+        "src/project-auto-plan.mjs",
+        "tests/chat-session-rotation.test.mjs",
+        "tests/project-auto-plan.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -538,7 +546,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1788
+Revision: 1790
 
 ## Цель
 
@@ -567,8 +575,8 @@ Revision: 1788
   - Файлы: src/chat-session-rotation-settings.mjs, src/main.mjs, src/preload.cjs, src/ui/settings-panel.mjs, src/ui/index.html, tests/settings-chat-session-rotation.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T001
-- [TODO] T003: Реализовать устойчивый счёт подтверждённых DONE для Chat — Ожидает
-  - Git Commit: [PENDING] feat: Реализовать устойчивый счёт подтверждённых DONE для Chat
+- [DONE] T003: Реализовать устойчивый счёт подтверждённых DONE для Chat — Завершено
+  - Git Commit: [DONE] feat: Реализовать устойчивый счёт подтверждённых DONE для Chat
   - Reference: chat-session-rotation-20261011 / T003 / implementation
   - Файлы: src/chat-session-rotation.mjs, src/project-auto-plan.mjs, src/auto-plan-state.mjs, tests/chat-session-rotation.test.mjs, tests/project-auto-plan.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

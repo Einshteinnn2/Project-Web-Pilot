@@ -2,6 +2,39 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ProjectAutoPlan } from '../src/project-auto-plan.mjs';
 
+test('Chat task cursor persists by scope and session without changing ON/OFF or recipient',()=>{
+ const sessions=new Set(['chat-a','chat-b']);
+ const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:(_workspace,id)=>sessions.has(id)});
+ auth.sync('/fixture','scope',{confirmed:true,planRevision:1,executionStrategy:'sequential',originSessionId:'chat-a'});
+ auth.set('/fixture','scope',true,'chat-a');
+ const a='a'.repeat(40),b='b'.repeat(40),c='c'.repeat(40);
+ const baseline={confirmed:true,workspace:'/fixture',projectId:'project',sessionId:'chat-a',scopeId:'scope',
+   experience:'chat',executionStrategy:'sequential',planRevision:1,baselineCommit:a,head:b,done:[],
+   history:[{sha:b,scopeId:'scope',taskId:'publish',role:'scope-plan'}]};
+ assert.deepEqual(auth.recordTaskProof('/fixture','chat-a',baseline),{recorded:true,count:0,added:[]});
+ const done={...baseline,planRevision:2,head:c,done:[{id:'T001',sha:c}],history:[...baseline.history,
+   {sha:c,scopeId:'scope',taskId:'T001',role:'implementation'}]};
+ auth.set('/fixture','scope',false,'chat-a');
+ assert.equal(auth.recordTaskProof('/fixture','chat-a',done).count,1,'OFF does not erase the cursor');
+ auth.set('/fixture','scope',true,'chat-a');
+ assert.equal(auth.recordTaskProof('/fixture','chat-a',done).count,1,'ON does not count twice');
+ const restored=new ProjectAutoPlan({saved:auth.snapshot(),identity:()=> 'project',ownsSession:(_w,id)=>sessions.has(id)});
+ assert.equal(restored.recordTaskProof('/fixture','chat-a',done).count,1,'restart retains task evidence');
+ assert.equal(restored.state('/fixture').sessionId,'chat-a','recording is not an authorization transfer');
+ assert.deepEqual(restored.checkpoint('/fixture','scope','chat-b'),{},'a different session has no inherited counter');
+ const otherBaseline={...done,sessionId:'chat-b'};
+ assert.equal(restored.recordTaskProof('/fixture','chat-b',otherBaseline).count,0,'new Chat snapshots existing DONE as baseline');
+ assert.equal(restored.state('/fixture').sessionId,'chat-a','a manual select does not steal the recipient');
+ const before=restored.snapshot();
+ assert.deepEqual(restored.recordTaskProof('/fixture','chat-a',{...done,scopeId:'other'}),
+   {recorded:false,reason:'ROTATION_SCOPE_OR_SESSION_CHANGED'});
+ assert.deepEqual(restored.snapshot(),before,'wrong plan cannot mutate persisted ledgers');
+ const foreign=new ProjectAutoPlan({saved:restored.snapshot(),identity:()=> 'replacement',ownsSession:()=>true});
+ assert.equal(foreign.recordTaskProof('/fixture','chat-a',done).recorded,false,'replaced project cannot inherit evidence');
+ restored.sync('/fixture','next-scope',{confirmed:true,planRevision:3,originSessionId:'chat-b',executionStrategy:'sequential'});
+ assert.deepEqual(restored.checkpoint('/fixture','next-scope','chat-a'),{},'a new scope gets a new cursor');
+});
+
 test('project permission is OFF by default and never migrates legacy global ON',()=>{
  const a=new ProjectAutoPlan({saved:{autoPlanEnabled:true,autoPlanCheckpoint:{}}});
  assert.deepEqual(a.checkpoint('/unknown',undefined,'chat'),{});a.saveCheckpoint('/unknown',undefined,'chat',{});

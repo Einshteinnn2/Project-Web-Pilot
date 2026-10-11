@@ -1,5 +1,7 @@
 // Authorization belongs to a project and its current scope. Session ledgers
 // survive OFF/restart, but never grant permission to another project or plan.
+import { advanceChatSessionTaskCounter } from './chat-session-rotation.mjs';
+
 export class ProjectAutoPlan {
   constructor({saved={},onChange=()=>{},identity=null,ownsSession=()=>true}={}) {
     this.book={};this.onChange=onChange;this.identity=identity;this.ownsSession=ownsSession;
@@ -82,6 +84,21 @@ export class ProjectAutoPlan {
   saveCheckpoint(workspace,scopeId,sessionId,patch) {
     if(!this.state(workspace)||this.state(workspace).scopeId!==scopeId||!this.ownsSession(workspace,sessionId))return;
     this.state(workspace).sessions[sessionId]={...this.checkpoint(workspace,scopeId,sessionId),...patch};this.onChange(workspace);
+  }
+  // Read-only with respect to permission: counting never toggles AutoPlan or
+  // transfers its recipient. The caller must persist settings before relying
+  // on this cursor to initiate a later session transition.
+  recordTaskProof(workspace,sessionId,proof) {
+    const state=this.state(workspace);
+    if(!state||state.scopeId!==proof?.scopeId||state.projectId!==proof?.projectId
+      ||state.executionStrategy==='parallel'||!this.ownsSession(workspace,sessionId)
+      ||proof?.workspace!==workspace||proof?.sessionId!==sessionId)
+      return { recorded:false, reason:'ROTATION_SCOPE_OR_SESSION_CHANGED' };
+    const previous=this.checkpoint(workspace,state.scopeId,sessionId).chatTaskCursor??null;
+    const result=advanceChatSessionTaskCounter(previous,proof);
+    if(JSON.stringify(previous)!==JSON.stringify(result.cursor))
+      this.saveCheckpoint(workspace,state.scopeId,sessionId,{chatTaskCursor:result.cursor});
+    return { recorded:true,count:result.count,added:result.added };
   }
   snapshot(){return structuredClone(this.book);}
 }
