@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1798,
+  "plan_revision": 1799,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -65,12 +65,12 @@
   "context_pack": {
     "documents": [
       {
-        "path": "docs/planning/chat-session-rotation-spec.md",
+        "path": "docs/architecture/OVERVIEW.md",
         "required": true,
         "revision": "WORKTREE"
       },
       {
-        "path": "docs/architecture/OVERVIEW.md",
+        "path": "docs/planning/chat-session-rotation-spec.md",
         "required": true,
         "revision": "WORKTREE"
       }
@@ -390,6 +390,40 @@
       "actual_files": []
     },
     {
+      "id": "T007A",
+      "title": "Закрепить проверенные изменения сквозной ротации",
+      "why": "Workflow Kit исключил исходники и TEST FIXTURE, внесённые до task:start T007. Зафиксировать именно эти уже проверенные изменения штатной микрозадачей до подготовки выпуска, без переписывания истории.",
+      "dependencies": [],
+      "functional_paths": [
+        "src/main.mjs",
+        "src/chat-session-rotation.mjs",
+        "tests/chat-session-rotation.test.mjs",
+        "tests/electron-smoke.mjs"
+      ],
+      "documentation_paths": [
+        "docs/planning/chat-session-rotation-spec.md"
+      ],
+      "verification_ids": [
+        "unit-all",
+        "electron-smoke"
+      ],
+      "verification_kind": "code",
+      "acceptance_criteria": [
+        "Сохранены проверенные исправления двух гонок: чтение актуального scope Kit и корректная обработка промежуточного Recovery sending.",
+        "Сквозной Electron TEST FIXTURE подтверждает N=1 и N=4, фоновый проект, ручной новый Chat, полный Recovery, единственный Continue и сохранение DONE.",
+        "Все пять исключённых из T007 файлов включены явным выбором в подтверждённый Git-коммит Kit. Unit-all и electron-smoke проходят, рабочее дерево чистое перед T008."
+      ],
+      "expected_commit_message": "test: зафиксировать сквозную ротацию Chat и исправления T007",
+      "implementation_status": "TODO",
+      "commit_status": "PENDING",
+      "commit_ref": {
+        "scope_id": "chat-session-rotation-20261011",
+        "task_id": "T007A",
+        "role": "implementation"
+      },
+      "parallel_safe": false
+    },
+    {
       "implementation_status": "TODO",
       "commit_status": "PENDING",
       "commit_ref": {
@@ -398,7 +432,8 @@
         "role": "implementation"
       },
       "dependencies": [
-        "T007"
+        "T007",
+        "T007A"
       ],
       "functional_paths": [
         "package.json",
@@ -442,6 +477,7 @@
         "T005",
         "T006",
         "T007",
+        "T007A",
         "T008"
       ],
       "functional_paths": [],
@@ -578,7 +614,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1798
+Revision: 1799
 
 ## Цель
 
@@ -637,18 +673,24 @@ Revision: 1798
   - Файлы: tests/electron-smoke.mjs, tests/auto-plan.test.mjs, tests/chat-session-rotation.test.mjs, tests/settings-chat-session-rotation.test.mjs, tests/conversation-recovery.test.mjs, tests/context-session.test.mjs, tests/session-runtime.test.mjs, tests/project-auto-plan.test.mjs, tests/workspace-session.test.mjs, src/chat-session-rotation.mjs, src/main.mjs, src/project-session-auto-plan.mjs, src/context-session.mjs, src/session-runtime.mjs, src/project-auto-plan.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T006
+- [TODO] T007A: Закрепить проверенные изменения сквозной ротации — Ожидает
+  - Git Commit: [PENDING] test: зафиксировать сквозную ротацию Chat и исправления T007
+  - Reference: chat-session-rotation-20261011 / T007A / implementation
+  - Файлы: src/main.mjs, src/chat-session-rotation.mjs, tests/chat-session-rotation.test.mjs, tests/electron-smoke.mjs, docs/planning/chat-session-rotation-spec.md
+  - Параллельность: исключительное выполнение
+  - Зависимости: нет
 - [TODO] T008: Подготовить источник выпуска 0.6.114 и проверки — Ожидает
   - Git Commit: [PENDING] feat: Подготовить источник выпуска 0.6.114 и проверки
   - Reference: chat-session-rotation-20261011 / T008 / implementation
   - Файлы: package.json, package-lock.json, .harness/workflow.json, scripts/check-installed-release.mjs, scripts/check-github-release.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
-  - Зависимости: T007
+  - Зависимости: T007, T007A
 - [TODO] DOCS: Актуализация всех документов проекта — Ожидает
   - Git Commit: [PENDING] docs: актуализировать ротацию Chat
   - Reference: chat-session-rotation-20261011 / DOCS / implementation
   - Файлы: docs/planning/chat-session-rotation-spec.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/context-delivery.md, docs/modules/workspace-sessions.md, docs/modules/session-runtime.md, docs/modules/workspace-sidebar-ui.md, docs/architecture/OVERVIEW.md, README.md, docs/modules/release.md
   - Параллельность: исключительное выполнение
-  - Зависимости: T001, T002, T003, T004, T005, T006, T007, T008
+  - Зависимости: T001, T002, T003, T004, T005, T006, T007, T007A, T008
 - [TODO] T009: Собрать единственный парный выпуск 0.6.114 — Ожидает
   - Git Commit: [PENDING] release: Собрать единственный парный выпуск 0.6.114
   - Reference: chat-session-rotation-20261011 / T009 / implementation
@@ -670,7 +712,7 @@ Revision: 1798
 
 ## Context Pack For This Cycle
 
-- docs/planning/chat-session-rotation-spec.md
 - docs/architecture/OVERVIEW.md
+- docs/planning/chat-session-rotation-spec.md
 
 Служебные состояния меняются только командами workflow. Приёмка не архивирует scope.
