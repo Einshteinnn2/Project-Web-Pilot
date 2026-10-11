@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1749,
+  "plan_revision": 1750,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -50,7 +50,7 @@
     ]
   },
   "baseline_commit": "cf6b42da5749dc04bc4e8988217121d52268f5df",
-  "current_task_id": "T006",
+  "current_task_id": null,
   "context_pack": {
     "documents": [
       {
@@ -302,8 +302,8 @@
       ]
     },
     {
-      "implementation_status": "IN_PROGRESS",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T006",
@@ -332,7 +332,12 @@
         "Коммит версии предшествует DOCS и build; вручную npm run build, установку и публикацию не запускать."
       ],
       "expected_commit_message": "chore: закрепить источник выпуска 0.6.112",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "package.json",
+        "package-lock.json",
+        "docs/modules/release.md"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -485,8 +490,8 @@
 Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
-Current Task: T006
-Revision: 1749
+Current Task: нет
+Revision: 1750
 
 ## Цель
 
@@ -535,8 +540,8 @@ Revision: 1749
   - Файлы: tests/electron-smoke.mjs, tests/sidebar.test.mjs, tests/workspace-deletion.test.mjs, src/main.mjs, docs/planning/archive-deletion-recovery-spec.md, README.md, docs/modules/project-archive.md, docs/modules/workspace-sessions.md, docs/modules/workspace-sidebar-ui.md, docs/modules/chromium-diagnostics.md
   - Параллельность: исключительное выполнение
   - Зависимости: T004
-- [IN_PROGRESS] T006: Зафиксировать версию 0.6.112 и условия проверок релиза — В работе
-  - Git Commit: [PENDING] chore: закрепить источник выпуска 0.6.112
+- [DONE] T006: Зафиксировать версию 0.6.112 и условия проверок релиза — Завершено
+  - Git Commit: [DONE] chore: закрепить источник выпуска 0.6.112
   - Reference: archive-deletion-recovery-20261011 / T006 / implementation
   - Файлы: package.json, package-lock.json, .harness/workflow.json, docs/modules/release.md
   - Параллельность: исключительное выполнение
