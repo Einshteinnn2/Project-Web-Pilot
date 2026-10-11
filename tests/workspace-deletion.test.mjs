@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import { WorkspaceSessions } from '../src/workspace-session.mjs';
+import { WorkspaceSessions, WorkspaceError } from '../src/workspace-session.mjs';
 import { WorkspaceDeletion } from '../src/workspace-deletion.mjs';
 
 async function boundChild(store,a,id) {
@@ -62,7 +62,7 @@ test('a replaced child directory stops journal recovery before parent removal',a
   assert.ok(await fs.stat(a));
 });
 
-test('characterization: two confirmed journals stay pending after parent and executor folders disappear',async t=>{
+test('characterization: recovered parent still leaves overlapping executor journal to T003',async t=>{
   const {root,store,service,project}=await fixture(t);
   const parent=await project('Мастерская файлов параллельно'),neighbour=await project('Соседний');
   const child=await boundChild(store,parent,'wp-lost-child');
@@ -92,26 +92,177 @@ test('characterization: two confirmed journals stay pending after parent and exe
   }
   const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
   const errors=await restarted.recover();
-  assert.equal(errors.length,2);
-  assert.deepEqual(new Set(errors.map(e=>e.workspace)),new Set([parent,child]));
-  assert.ok(errors.every(e=>e.code==='DELETE_PATH_CHANGED'));
-  assert.equal(restarted.isPending(parent),true);
-  assert.equal(restarted.isPending(child),true);
-  assert.equal(store.project(parent).archivedAt!==null,true);
-  assert.equal(store.project(child,childSessionId).sessionId,childSessionId);
-  assert.equal((await fs.readdir(service.journalDir)).length,2);
+  assert.ok(errors.length<=1,'T002 can resume confirmed metadata but T003 owns overlapping journal cleanup');
+  assert.ok(errors.every(e=>['DELETE_SOURCE_UNAVAILABLE','DELETE_RECORD_CHANGED'].includes(e.code)));
+  assert.ok(!store.project(parent),'parent metadata was recovered without original/quarantine');
+  assert.equal((await fs.readdir(service.journalDir)).length,errors.length);
+  if(errors.length)assert.ok(restarted.isPending(child));
+  assert.equal(store.project(child,childSessionId),null);
   assert.equal(store.project(neighbour).workspace,neighbour);
   assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
   assert.ok(store.file.startsWith(root+path.sep),'the test store must stay inside the temporary fixture');
-  assert.deepEqual(await restarted.recover(),errors,'repeated recovery preserves the same pending journals');
+  assert.deepEqual(await restarted.recover(),errors,'an unresolved overlapping journal remains retryable');
 
-  // T002/T003: replace current-error assertions with the successful post-fix contract:
+  // T003: both independent journals complete in either order, without stale child metadata:
   // assert.deepEqual(await restarted.recover(), []);
   // assert.equal(store.project(parent), null);
   // assert.equal(store.project(child), null);
   // assert.deepEqual(await fs.readdir(service.journalDir), []);
   // assert.deepEqual(await restarted.recover(), []);
   // assert.ok(store.project(neighbour));
+});
+
+async function interruptConfirmed(service,workspace) {
+  service.finish=async()=>{throw Error('fixture interruption before filesystem mutation');};
+  const preview=await service.preview(workspace);
+  await assert.rejects(service.apply(preview.token,preview.name),/fixture interruption/);
+  const [filename]=await fs.readdir(service.journalDir);
+  return {filename,job:JSON.parse(await fs.readFile(path.join(service.journalDir,filename),'utf8'))};
+}
+
+test('confirmed with neither path present only clears local state, copies and journal; restart is idempotent',async t=>{
+  const {root,store,service,project}=await fixture(t);
+  const removed=await project('Removed'),neighbour=await project('Neighbour');
+  await store.setArchived(removed,true);
+  const diagnostic=path.join(root,'app/diagnostics.jsonl');
+  await fs.writeFile(diagnostic,[removed,neighbour].map(workspace=>JSON.stringify({workspace})).join('\n')+'\n');
+  await fs.writeFile(store.file+'.v2-backup',JSON.stringify(store.snapshot()));
+  const {job}=await interruptConfirmed(service,removed);
+  assert.equal(job.stage,'confirmed');
+  await fs.rm(removed,{recursive:true});
+  const marker=path.join(root,'outside.txt');
+  await fs.writeFile(marker,'unchanged');
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual(await restarted.recover(),[]);
+  assert.equal(store.project(removed),null);
+  assert.deepEqual(await fs.readdir(service.journalDir),[]);
+  assert.deepEqual(await restarted.recover(),[]);
+  assert.equal(await fs.readFile(marker,'utf8'),'unchanged');
+  assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
+  assert.deepEqual(JSON.parse(await fs.readFile(store.file+'.v2-backup','utf8')).projects.map(p=>p.workspace),[neighbour]);
+  assert.deepEqual(JSON.parse((await fs.readFile(diagnostic,'utf8')).trim()),{workspace:neighbour});
+});
+
+test('confirmed metadata-only survives stage-save error and a restart after cleanup failure',async t=>{
+  const {store,service,project}=await fixture(t);
+  const removed=await project('A'),neighbour=await project('B');
+  await store.setArchived(removed,true);
+  const {filename}=await interruptConfirmed(service,removed);
+  await fs.rm(removed,{recursive:true});
+  const failing=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  failing.saveJob=async()=>{throw Error('stage write failure');};
+  assert.deepEqual((await failing.recover()).map(e=>e.message),['stage write failure']);
+  assert.equal(JSON.parse(await fs.readFile(path.join(service.journalDir,filename),'utf8')).stage,'confirmed');
+  const checkpoint=new WorkspaceDeletion({store,journalDir:service.journalDir,cleanup:async()=>{throw Error('interrupted cleanup');}});
+  assert.deepEqual((await checkpoint.recover()).map(e=>e.message),['interrupted cleanup']);
+  const saved=JSON.parse(await fs.readFile(path.join(service.journalDir,filename),'utf8'));
+  assert.equal(saved.stage,'removing');assert.equal(saved.metadataOnly,true);
+  await fs.mkdir(removed);
+  await fs.writeFile(path.join(removed,'foreign'),'keep');
+  const retry=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual((await retry.recover()).map(e=>e.code),['DELETE_PATH_CHANGED']);
+  assert.equal(await fs.readFile(path.join(removed,'foreign'),'utf8'),'keep');
+  await fs.rm(removed,{recursive:true}); // fixture-only cleanup of the foreign replacement
+  assert.deepEqual(await retry.recover(),[]);
+  assert.deepEqual(await retry.recover(),[]);
+  assert.equal(store.project(removed),null);assert.ok(store.project(neighbour));
+});
+
+test('confirmed missing worktree tolerates removed hashed group with verified outer container',async t=>{
+  const {store,service,project}=await fixture(t);
+  const parent=await project('Parent'),child=await boundChild(store,parent,'child-t002');
+  await store.setArchived(child,true);
+  const {job}=await interruptConfirmed(service,child);
+  assert.ok(job.identity?.dev);
+  const group=path.dirname(child),container=path.dirname(group);
+  await fs.rm(child,{recursive:true});
+  await fs.rmdir(group);
+  assert.ok((await fs.stat(container)).isDirectory());
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual(await restarted.recover(),[]);
+  assert.equal(store.project(child),null);
+  assert.ok(store.project(parent));
+  assert.ok((await fs.stat(container)).isDirectory(),'container is not removed by metadata-only recovery');
+});
+
+test('a removed worktree container is not proof of completed deletion',async t=>{
+  const {store,service,project}=await fixture(t);
+  const parent=await project('Parent'),child=await boundChild(store,parent,'child-t002-unavailable');
+  await store.setArchived(child,true);
+  const {filename}=await interruptConfirmed(service,child);
+  await fs.rm(path.dirname(path.dirname(child)),{recursive:true});
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual((await restarted.recover()).map(e=>e.code),['DELETE_SOURCE_UNAVAILABLE']);
+  assert.ok(store.project(child));
+  assert.deepEqual(await fs.readdir(service.journalDir),[filename]);
+  assert.ok(store.project(parent));
+});
+
+test('a missing=true confirmed journal rejects a newly appeared project directory',async t=>{
+  const {store,service,project}=await fixture(t);
+  const removed=await project('A');
+  await store.setArchived(removed,true);
+  await fs.rm(removed,{recursive:true});
+  const {job}=await interruptConfirmed(service,removed);
+  assert.equal(job.missing,true);
+  await fs.mkdir(removed);
+  await fs.writeFile(path.join(removed,'replacement.txt'),'new owner');
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual((await restarted.recover()).map(e=>e.code),['DELETE_PATH_CHANGED']);
+  assert.equal(await fs.readFile(path.join(removed,'replacement.txt'),'utf8'),'new owner');
+  assert.ok(store.project(removed));
+});
+
+test('missing mountpoint, inaccessible anchor and changed device refuse confirmed recovery',async t=>{
+  for(const variant of ['absent-mountpoint','EACCES','EIO','different-device']) {
+    await t.test(variant,async sub=>{
+      const {root,store,service,project}=await fixture(sub);
+      const removed=await project('volume/A');
+      await store.setArchived(removed,true);
+      const {filename}=await interruptConfirmed(service,removed);
+      await fs.rm(removed,{recursive:true});
+      if(variant==='absent-mountpoint')await fs.rmdir(path.dirname(removed));
+      if(variant==='different-device') {
+        const file=path.join(service.journalDir,filename),job=JSON.parse(await fs.readFile(file,'utf8'));
+        job.identity.dev=String(BigInt(job.identity.dev)+1n);
+        await fs.writeFile(file,JSON.stringify(job));
+      }
+      const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+      if(variant==='EACCES'||variant==='EIO') {
+        const original=fs.lstat;
+        fs.lstat=async (file,...args)=>{if(file===path.dirname(removed))throw Object.assign(Error('inaccessible mount'),{code:variant});
+          return original(file,...args);};
+        try {assert.deepEqual((await restarted.recover()).map(e=>e.code),[variant]);}
+        finally {fs.lstat=original;}
+      } else assert.deepEqual((await restarted.recover()).map(e=>e.code),['DELETE_SOURCE_UNAVAILABLE']);
+      assert.ok(store.project(removed));
+      assert.deepEqual(await fs.readdir(service.journalDir),[filename]);
+      assert.ok(store.file.startsWith(root+path.sep));
+    });
+  }
+});
+
+test('invalid journal, protected root, active or UNKNOWN executor do not clear metadata',async t=>{
+  for(const variant of ['journal','protected','active','unknown']) {
+    await t.test(variant,async sub=>{
+      const {store,service,project}=await fixture(sub),removed=await project('A');
+      await store.setArchived(removed,true);
+      const {filename}=await interruptConfirmed(service,removed);
+      await fs.rm(removed,{recursive:true});
+      if(variant==='journal') {
+        const file=path.join(service.journalDir,filename),job=JSON.parse(await fs.readFile(file,'utf8'));
+        job.identity.ino='invalid';
+        await fs.writeFile(file,JSON.stringify(job));
+      }
+      const options={store,journalDir:service.journalDir};
+      if(variant==='protected')options.protectedPaths=[removed];
+      if(variant==='active'||variant==='unknown')options.prepare=async()=>{throw new WorkspaceError('DELETE_PROJECT_BUSY',variant+' executor');};
+      const restarted=new WorkspaceDeletion(options);
+      assert.deepEqual((await restarted.recover()).map(e=>e.code),[
+        variant==='journal'?'DELETE_RECOVERY_FAILED':variant==='protected'?'DELETE_PROTECTED':'DELETE_PROJECT_BUSY']);
+      assert.ok(store.project(removed));assert.deepEqual(await fs.readdir(service.journalDir),[filename]);
+    });
+  }
 });
 
 test('characterization: confirmed journal refuses a new directory at the deleted project path',async t=>{

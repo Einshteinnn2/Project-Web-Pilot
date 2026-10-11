@@ -11,6 +11,23 @@ const within = (child, parent) => child === parent || child.startsWith(parent + 
 const lstatOrNull = async file => { try { return await fs.lstat(file, { bigint: true }); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
 const identity = stat => ({ dev: String(stat.dev), ino: String(stat.ino) });
 const same = (stat, expected) => stat?.isDirectory() && !stat.isSymbolicLink() && String(stat.dev) === expected.dev && String(stat.ino) === expected.ino;
+const worktreeGroup = parent => path.join(path.dirname(parent), '.web-pilot-worktrees',
+  createHash('sha256').update(parent).digest('hex').slice(0, 16));
+const validIdentity = value => value && /^\d+$/.test(value.dev) && /^\d+$/.test(value.ino);
+const validJournal = (job, name) => job && typeof job === 'object'
+  && typeof job.id === 'string' && /^[0-9a-f-]{36}$/.test(job.id) && name === job.id + '.json'
+  && typeof job.workspace === 'string' && path.isAbsolute(job.workspace)
+  && path.normalize(job.workspace) === job.workspace
+  && typeof job.projectId === 'string' && !!job.projectId
+  && job.quarantine === path.join(path.dirname(job.workspace), '.web-pilot-delete-' + job.id)
+  && ['confirmed', 'removing'].includes(job.stage)
+  && typeof job.missing === 'boolean' && (job.missing ? job.identity === null : validIdentity(job.identity))
+  && Array.isArray(job.sessionIds) && job.sessionIds.every(id => typeof id === 'string')
+  && Array.isArray(job.related) && job.related.every(child =>
+    child && typeof child.workspace === 'string' && path.isAbsolute(child.workspace)
+    && (child.projectId === undefined || typeof child.projectId === 'string')
+    && typeof child.parentProjectId === 'string'
+    && Array.isArray(child.sessionIds));
 
 export class WorkspaceDeletion {
   constructor({ store, journalDir, protectedPaths = [], home = os.homedir(), prepare=async()=>{}, cleanup=async()=>{}, purgeState=purgeProjectStateFiles, git=workspaceGit }) {
@@ -148,6 +165,23 @@ export class WorkspaceDeletion {
     }
     });
   }
+  // ENOENT alone is ambiguous: the disk or mount point might have disappeared.
+  // For an already removed worktree, its hashed group may be gone; its outer
+  // .web-pilot-worktrees container must still be accessible on the original device.
+  async verifyAbsent(workspace, expectedDev, parentWorkspace = null) {
+    if (await lstatOrNull(workspace)) fail('DELETE_PATH_CHANGED', 'На месте удалённой папки появился другой каталог.');
+    let anchor = path.dirname(workspace);
+    if (parentWorkspace && anchor === worktreeGroup(parentWorkspace)
+        && !await lstatOrNull(anchor)) anchor = path.dirname(anchor);
+    const stat = await lstatOrNull(anchor);
+    if (!stat || !stat.isDirectory() || stat.isSymbolicLink()
+        || await fs.realpath(anchor) !== anchor
+        || expectedDev && String(stat.dev) !== expectedDev)
+      fail('DELETE_SOURCE_UNAVAILABLE', 'Не удалось подтвердить доступность исходного тома и каталога. Очистка остановлена.');
+    // An inaccessible but present mount/root is not proof that the child is gone.
+    await fs.readdir(anchor);
+    if (await lstatOrNull(workspace)) fail('DELETE_PATH_CHANGED', 'Исходный путь снова занят. Очистка остановлена.');
+  }
   async finish(job) {
     const record = this.store.project(job.workspace);
     if (record && (!record.archivedAt || record.projectId !== job.projectId)) fail('DELETE_RECORD_CHANGED', 'Запись проекта изменилась. Автоматическая очистка остановлена.');
@@ -161,8 +195,21 @@ export class WorkspaceDeletion {
     await this.guard(job.workspace);
     let quarantined = await lstatOrNull(job.quarantine);
     if (quarantined && !same(quarantined, job.identity)) fail('DELETE_PATH_CHANGED', 'Папка удаления была заменена. Очистка остановлена.');
-    if (!quarantined && job.stage === 'confirmed' && !job.missing) {
-      const original = await lstatOrNull(job.workspace);
+    const original = job.stage === 'confirmed' ? await lstatOrNull(job.workspace) : null;
+    const metadataOnly = job.metadataOnly === true
+      || job.stage === 'confirmed' && !quarantined && !original;
+    if(job.metadataOnly && quarantined)fail('DELETE_PATH_CHANGED','В карантине появилась папка после подтверждённого отсутствия.');
+    if (job.stage === 'confirmed' && job.missing && (original || quarantined))
+      fail('DELETE_PATH_CHANGED', 'После подтверждения отсутствующей папки путь изменился.');
+    if (metadataOnly) {
+      await this.verifyAbsent(job.workspace, job.identity?.dev, record?.parentWorkspace);
+      for (const item of job.related??[]) {
+        const expected = path.join(worktreeGroup(job.workspace), item.id??'');
+        if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(item.id??'') || item.workspace !== expected)
+          fail('DELETE_WORKTREE_CHANGED', 'Путь исполнителя в журнале изменён.');
+        await this.verifyAbsent(item.workspace, item.identity?.dev ?? job.identity?.dev, job.workspace);
+      }
+    } else if (!quarantined && job.stage === 'confirmed' && !job.missing) {
       if (!same(original, job.identity)) fail('DELETE_PATH_CHANGED', 'Исходная папка изменилась. Очистка остановлена.');
       const latest = await this.inspect(job.workspace);
       if (latest.fingerprint !== job.fingerprint) fail('DELETE_PREVIEW_CHANGED', 'Папка изменилась до удаления. Очистка остановлена.');
@@ -171,20 +218,23 @@ export class WorkspaceDeletion {
       if (!same(quarantined, job.identity)) fail('DELETE_PATH_CHANGED', 'Папка изменилась во время удаления. Очистка остановлена.');
     }
     // After this durable stage, recovery only touches the renamed directory; a replacement at the old path is preserved.
+    if(metadataOnly)job.metadataOnly = true;
     job.stage = 'removing'; await this.saveJob(job);
     if (quarantined) await fs.rm(job.quarantine, { recursive: true });
     for(const item of job.related??[]) {
-      const expected=path.join(path.dirname(job.workspace),'.web-pilot-worktrees',createHash('sha256').update(job.workspace).digest('hex').slice(0,16),item.id??'');
+      const expected=path.join(worktreeGroup(job.workspace),item.id??'');
       if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(item.id??'')||item.workspace!==expected)fail('DELETE_WORKTREE_CHANGED','Путь в журнале удаления не подтверждён.');
       const stat=await lstatOrNull(item.workspace);
       if(stat) {
+        if(metadataOnly)fail('DELETE_WORKTREE_CHANGED','Папка исполнителя появилась после проверки. Очистка остановлена.');
         if(!item.identity||!same(stat,item.identity)||await fs.realpath(item.workspace)!==item.workspace)
           fail('DELETE_WORKTREE_CHANGED','Папка исполнителя была заменена. Очистка остановлена.');
         await fs.rm(item.workspace,{recursive:true});
       }
     }
-    const group=path.join(path.dirname(job.workspace),'.web-pilot-worktrees',createHash('sha256').update(job.workspace).digest('hex').slice(0,16));
-    await fs.rmdir(group).catch(e=>{if(!['ENOENT','ENOTEMPTY','EEXIST'].includes(e.code))throw e;});
+    const group=worktreeGroup(job.workspace);
+    if(!metadataOnly)await fs.rmdir(group).catch(e=>{if(!['ENOENT','ENOTEMPTY','EEXIST'].includes(e.code))throw e;});
+    else await this.verifyAbsent(job.workspace,job.identity?.dev,record?.parentWorkspace);
     const identities=[{workspace:job.workspace,projectId:job.projectId,sessionIds:job.sessionIds??[]},...(job.related??[])];
     await this.cleanup(job);
     await this.purgeState(path.dirname(this.store.file),identities);
@@ -200,8 +250,7 @@ export class WorkspaceDeletion {
       let job;
       try {
         job = JSON.parse(await fs.readFile(path.join(this.journalDir, name), 'utf8'));
-        if (name !== job.id + '.json' || !path.isAbsolute(job.workspace) || job.quarantine !== path.join(path.dirname(job.workspace), '.web-pilot-delete-' + job.id)
-            || !['confirmed', 'removing'].includes(job.stage) || (!job.missing && (!job.identity?.dev || !job.identity?.ino))) throw new Error('Неверный журнал удаления.');
+        if (!validJournal(job,name)) throw new Error('Неверный журнал удаления.');
         this.pending.add(job.workspace); await this.finish(job);
       } catch (error) { errors.push({ workspace: job?.workspace, message: String(error.message), code: error.code ?? 'DELETE_RECOVERY_FAILED' }); }
     }

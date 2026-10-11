@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1739,
+  "plan_revision": 1741,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -127,8 +127,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T002",
@@ -155,7 +155,11 @@
         "ENOENT при отсутствующей точке монтирования или недоступном стабильном родителе не запускает очистку; штатно удалённая hashed group worktree допускается только при доказанно доступных внешнем контейнере и томе, с fixture-регрессией."
       ],
       "expected_commit_message": "fix: восстановить confirmed удаление после исчезновения каталога",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "src/workspace-deletion.mjs",
+        "tests/workspace-deletion.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -458,7 +462,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1739
+Revision: 1741
 
 ## Цель
 
@@ -483,8 +487,8 @@ Revision: 1739
   - Файлы: tests/workspace-deletion.test.mjs, tests/workspace-session.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: нет
-- [TODO] T002: Доводить confirmed без исходной папки и карантина — Ожидает
-  - Git Commit: [PENDING] fix: восстановить confirmed удаление после исчезновения каталога
+- [DONE] T002: Доводить confirmed без исходной папки и карантина — Завершено
+  - Git Commit: [DONE] fix: восстановить confirmed удаление после исчезновения каталога
   - Reference: archive-deletion-recovery-20261011 / T002 / implementation
   - Файлы: src/workspace-deletion.mjs, tests/workspace-deletion.test.mjs
   - Параллельность: исключительное выполнение
