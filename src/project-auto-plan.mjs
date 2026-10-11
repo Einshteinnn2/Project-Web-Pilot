@@ -37,8 +37,10 @@ export class ProjectAutoPlan {
       return this.enabled(workspace,scopeId);
     if(old?.scopeId!==scopeId){
       const inherited=old?.awaitingPlan===true&&old.enabled===true;
-      // A published plan chooses the origin, never the chat that toggled ON.
-      const recipient=originSessionId?(this.ownsSession(workspace,originSessionId)?originSessionId:null):old?.sessionId??null;
+      // The published Kit origin takes priority over the pre-plan button
+      // session. A missing (legacy) origin retains its former fallback; an
+      // explicit but unregistered origin must not silently grant that chat.
+      const recipient=originSessionId!==null?(this.ownsSession(workspace,originSessionId)?originSessionId:null):old?.sessionId??null;
       this.book[workspace]={projectId:this.identity?.(workspace)??null,scopeId,enabled:inherited,
         sessionId:inherited?recipient:null,offReason:null,planRevision:revision,
         previousScopeId:(old?.scopeId||old?.previousScopeId)??null,sessions:Object.fromEntries(Object.entries(old?.sessions??{})

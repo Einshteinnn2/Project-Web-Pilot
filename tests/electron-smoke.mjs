@@ -1359,10 +1359,9 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     browser.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
   };
   // 01TestAuto: saved ON -> new Chat with NONE -> busy plan creation -> idle.
-  // T001 characterization (not the desired contract): trace the *real*
-  // sidebar/preload/IPC path, including the persisted project permission.
-  // T002 must replace the second ON below with an assertion that the first
-  // ON survives NONE -> ACTIVE and sends once when the planning reply ends.
+  // T002 regression of T001's characterized gap: the *same* ON must survive
+  // sidebar/preload/IPC -> NONE -> published ACTIVE -> first assistant idle.
+  // Record the persisted permission and the controller's actual recipient.
   const autoPlanLifecycle = [];
   const characterizeAutoPlan = async step => {
     const selected = store.selected();
@@ -1393,8 +1392,15 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     '01TestAuto new Chat starts with NONE and saved ON', snapshot);
   const autoScopeOwner = store.selected();
   assert.equal(await countMessages(), 1, 'only normal recovery; no AutoPlan startup instruction');
-  await characterizeAutoPlan('new-chat-Recovery-NONE');
-  assert.equal(autoPlan.view().enabled, false);
+  await waitFor(()=>autoPlan.view().enabled===true && snapshot().autoPlan.enabled===true,
+    'pre-plan ON survives new Chat Recovery',snapshot);
+  const beforePlan=await characterizeAutoPlan('new-chat-Recovery-NONE');
+  assert.equal(beforePlan.persistedON,true);
+  assert.equal(beforePlan.awaitingPlan,true);
+  assert.equal(beforePlan.controllerON,true);
+  assert.equal(beforePlan.sidebarON,true);
+  await waitFor(()=>sidebar.executeJavaScript("document.getElementById('auto-plan-message').dataset.reason.length>0"),
+    'pre-plan wait is visible rather than OFF',snapshot);
   await beginAnswer(); await noExtraSend(1);
   const legacyChats = [prePlanChat, autoScopeOwner]
     .map(session => store.project(workspace,session.sessionId))
@@ -1404,6 +1410,9 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
 
   const definition = {
     scope_id: 'fixture-current-plan', objective: 'Единый current plan smoke', approval_note: 'Изолированный single-active smoke fixture.',
+    parallel_allowed: true, max_workers: 4, execution_strategy: 'sequential',
+    execution_reason: 'Fixture checks a single active writer with a verified main chat.',
+    execution_origin_session_id: scopeOwner.sessionId,
     acceptance_criteria: ['Fixture завершён'],
     approved_scope: { functional_paths: [], documentation_paths: ['docs/architecture/OVERVIEW.md'], max_functional_files_per_task: 3 },
     tasks: [{ id: 'T001', title: 'Записать общий результат', why: 'Проверить один plan на несколько chats', dependencies: [],
@@ -1422,26 +1431,26 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   const scopeOwnerId = new URL(scopeOwner.chatUrl).pathname.split('/').at(-1);
   await waitFor(() => fixtureConversationTitles.get(scopeOwnerId) === currentScopeTitle,
     'scope owner title is synchronized to native ChatGPT fixture', snapshot);
-  const afterPublication = await characterizeAutoPlan('Kit-published-ACTIVE-before-second-ON');
-  assert.equal(afterPublication.controllerON, false,
-    'T001 CURRENT: first ON does not arm the new session; T002 must require controllerON=true');
-  assert.equal(afterPublication.sends, 1,
-    'T001 CURRENT: scope publication alone does not send; T002 must continue on first assistant idle');
-  assert.equal(autoPlan.view().enabled, false);
+  await waitFor(async()=>{
+    const current=await savedAutoState();
+    return current.autoPlanEnabled && autoPlan.view().enabled && snapshot().autoPlan.enabled
+      && snapshot().selected?.planExecution?.execution_origin_session_id===scopeOwner.sessionId;
+  }, 'first confirmed plan binds original ON to the published origin',snapshot);
+  const afterPublication = await characterizeAutoPlan('Kit-published-ACTIVE-without-second-ON');
+  assert.equal(afterPublication.controllerON, true);
+  assert.equal(afterPublication.sidebarON, true);
+  assert.equal(afterPublication.sends, 1,'busy planning answer is not interrupted');
+  assert.equal(afterPublication.persistedScope, 'fixture-current-plan');
+  assert.equal(afterPublication.recipient, scopeOwner.sessionId);
+  assert.equal(afterPublication.publishedOrigin, scopeOwner.sessionId);
   await endAnswer('Создан текущий план, обычный отчёт без специальной итоговой строки.');
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await expectContinue(1, 'first ON before plan continues on first assistant idle');
   const idleAfterFirstON = await characterizeAutoPlan('planning-reply-idle-with-only-first-ON');
-  assert.equal(idleAfterFirstON.sends, 1,
-    'T001 CURRENT: even after assistant idle the first ON has not sent; T002 must expect 2');
+  assert.equal(idleAfterFirstON.sends, 2);
   assert.equal(idleAfterFirstON.persistedON, true, 'the user permission is not actually OFF');
-  assert.equal(idleAfterFirstON.sidebarON, true, 'sidebar ON currently masks a disabled per-chat controller');
-  assert.equal(idleAfterFirstON.persistedScope, 'fixture-current-plan', 'a delayed monitor binds the plan');
-  assert.notEqual(idleAfterFirstON.recipient, scopeOwner.sessionId,
-    'T001 CURRENT: binding retains the pre-plan chat rather than waking the planning chat');
-  assert.equal(idleAfterFirstON.controllerON, false, 'the new chat never became permitted after publication');
-  await sidebar.executeJavaScript('window.webPilot.setAutoPlan(true)');
-  await characterizeAutoPlan('workaround-second-ON');
-  await expectContinue(1, '01TestAuto NONE -> ACTIVE -> idle sends exactly one Continue');
+  assert.equal(idleAfterFirstON.sidebarON, true);
+  assert.equal(idleAfterFirstON.recipient, scopeOwner.sessionId);
+  assert.equal(idleAfterFirstON.controllerON, true);
   await noExtraSend(2);
   const loadsBeforeProgress = packetLoads;
   await beginAnswer();

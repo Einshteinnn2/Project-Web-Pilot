@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1763,
+  "plan_revision": 1765,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -119,8 +119,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T002",
@@ -151,7 +151,14 @@
         "UI/сохранённая запись/controller не показывают противоречивого OFF при действующем ожидании."
       ],
       "expected_commit_message": "fix: retain AutoPlan authorization across plan publication",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "src/main.mjs",
+        "src/project-auto-plan.mjs",
+        "src/project-session-auto-plan.mjs",
+        "tests/electron-smoke.mjs",
+        "tests/project-auto-plan.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -397,7 +404,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1763
+Revision: 1765
 
 ## Цель
 
@@ -422,8 +429,8 @@ Revision: 1763
   - Файлы: tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, tests/electron-smoke.mjs, tests/parallel-execution-recovery.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: нет
-- [TODO] T002: Сохранить ON при создании сессии и публикации первого плана — Ожидает
-  - Git Commit: [PENDING] fix: retain AutoPlan authorization across plan publication
+- [DONE] T002: Сохранить ON при создании сессии и публикации первого плана — Завершено
+  - Git Commit: [DONE] fix: retain AutoPlan authorization across plan publication
   - Reference: autoplan-lifecycle-recovery-20261011 / T002 / implementation
   - Файлы: src/project-auto-plan.mjs, src/project-session-auto-plan.mjs, src/main.mjs, tests/project-auto-plan.test.mjs, tests/electron-smoke.mjs
   - Параллельность: исключительное выполнение

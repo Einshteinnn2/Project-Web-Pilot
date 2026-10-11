@@ -13,7 +13,15 @@ export function configureProjectAutoPlan(record,{store,authorization,inspectPlan
     // A different chat's stale monitor cannot supersede project-level scope.
     return {...project,...info,scopeId:authority?.scopeId??info?.scopeId??null};
   };
-  const permitted=p=>authorization.enabled(p.workspace,p.scopeId)&&authorization.state(p.workspace)?.sessionId===p.sessionId;
+  const permitted=p=>{
+    const state=authorization.state(p.workspace);
+    if(!state?.enabled||(state.projectId&&state.projectId!==p.projectId)
+      ||!authorization.enabled(p.workspace,p.scopeId))return false;
+    // An ON armed before the first scope belongs to the project, not to the
+    // chat which happened to be selected when ON was clicked. Every main chat
+    // may show WAIT; none can Send until a confirmed plan binds its origin.
+    return state.awaitingPlan===true || state.sessionId===p.sessionId;
+  };
   const save=patch=>{const project=selected();authorization.saveCheckpoint(project.workspace,project.scopeId,project.sessionId,patch);};
   const automation=new AutomationSendState({save:checkpoint=>save({automationCheckpoint:checkpoint})});
   const complete=()=>{const project=selected();authorization.sync(project.workspace,project.scopeId,

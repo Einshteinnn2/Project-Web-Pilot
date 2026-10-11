@@ -224,7 +224,8 @@ test('A01/A02/A04/A06: two main monitors in one project send only from plan orig
    onChange:()=>records.forEach(r=>r.primaryAutomation?.update())});
  auth.set(root,null,true,'a');
  for(const id of ['a','b']){
-  const project={workspace:root,projectId:'project',sessionId:id,chatUrl:'https://chatgpt.com/c/'+id};
+  const project={workspace:root,projectId:'project',sessionId:id,experience:id==='a'?'chat':'work',
+    chatUrl:'https://chatgpt.com/c/'+id};
   const record={identity:{workspace:root,sessionId:id},project:()=>project,ready:true,loading:false,cleanups:[],
     controller:{pending:false,state:{phase:'delivered'},projectChanged:()=>{}},
     composer:{inFlight:false,sendUserMessage:async({canContinue,onBeforeSend})=>{
@@ -244,19 +245,29 @@ test('A01/A02/A04/A06: two main monitors in one project send only from plan orig
  }
  const settle=()=>new Promise(resolve=>setTimeout(resolve,90));
  await settle();assert.equal(auth.enabled(root,null),true);
+ assert.equal(records[0].primaryAutomation.flow.enabled,true,'old main reflects project WAIT');
+ assert.equal(records[1].primaryAutomation.flow.enabled,true,'new main reflects the same WAIT, without new ON');
  assert.deepEqual(sends,[]);
  // The non-origin chat reports stale NONE while the published plan names b.
  Object.assign(state,{scopeId:'first',scopeStatus:'ACTIVE',confirmed:true,planRevision:3,
   planExecution:{execution_strategy:'sequential',execution_origin_session_id:'b'},
   planView:{tasks:[{id:'T001',status:'pending'}]}});
+ review=true; // Review can project a plan before it is safe to publish/execute.
  staleA=true;await records[0].primaryAutomation.monitor.tick();
  await records[1].primaryAutomation.monitor.tick();await settle();
+ assert.equal(auth.enabled(root,null),true,'Review cannot consume the pre-plan ON');
+ assert.equal(auth.state(root).awaitingPlan,true);
+ assert.deepEqual(sends,[],'Review blocks both Chat and Work');
+ review=false;
+ records[1].primaryAutomation.changed();await settle();
  assert.equal(auth.enabled(root,'first'),true);assert.equal(auth.state(root).sessionId,'b');
  for(const record of records)record.primaryAutomation.observe({documentId:'doc',state:{
   url:record.project().chatUrl,busy:false,lastMessageRole:'assistant',turnId:'before',userTurnId:'user',
   editorAvailable:true,writable:true,draftPresent:false}});
  await settle();await Promise.all(records.map(r=>r.primaryAutomation.flow.reconcile()));
  assert.deepEqual(sends,['b']);
+ assert.equal(records[0].primaryAutomation.flow.enabled,false,'non-origin main loses execution permission after binding');
+ assert.equal(records[1].primaryAutomation.flow.enabled,true,'published origin is automatically armed');
  failA=true;staleA=false;await records[0].primaryAutomation.monitor.tick();await settle();
  assert.equal(auth.enabled(root,'first'),true);assert.equal(auth.state(root).offReason,null);
  assert.deepEqual(sends,['b']);

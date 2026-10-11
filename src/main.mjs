@@ -474,7 +474,8 @@ function snapshot() {
       .map(c=>({...c,projectId:store.project(c.workspace)?.projectId}))},
     conversationRecovery: conversationRecovery?.view() ?? { phase: 'idle', message: '', canRetry: false },
     autoPlan: {...(liveSessions.visible?.executor?.flow.view()??autoPlan.view()),
-      enabled:projectAutoPlan.enabled(saved?.parentWorkspace??saved?.workspace,saved?.parentScopeId??info?.scopeId??saved?.scopeId)},
+      enabled:projectAutoPlan.enabled(saved?.parentWorkspace??saved?.workspace,saved?.parentScopeId??info?.scopeId??saved?.scopeId)
+        ||projectAutoPlan.enabled(saved?.parentWorkspace??saved?.workspace,null)},
     planReview: {...planReview.view(),...(reviewContinuation.persistenceError?{message:reviewContinuation.flow.state.message,indicator:'attention'}: {})},
     selected, context: controller?.state ?? { phase: 'selected', servicesReady: false, messageSent: false },
     contextPreparation: { busy: selected ? contextCache.isBuilding(selected.workspace) : false },
@@ -1151,6 +1152,10 @@ function registerIpc() {
   registerAction('pilot:auto-plan', async enabled => {
     const selected=store.selected(),workspace=selected?.parentWorkspace??selected?.workspace;
     const project=selected?.parentWorkspace?store.project(workspace):selected;
+    if(!project){
+      if(enabled===true)throw new Error('Выберите проект для автовыполнения.');
+      return; // Closing an unselected/legacy OFF state is a harmless no-op.
+    }
     const info=project&&await readAutoPlanState(project,workspaceSetup.environment);
     let verified=info?.confirmed===true;
     if(info?.scopeId&&info.planExecution?.execution_strategy==='parallel'){
@@ -1158,6 +1163,9 @@ function registerIpc() {
       verified=kit.confirmed&&kit.plan.project_id===info.projectId
         &&kit.plan.scope_id===info.scopeId&&kit.plan.plan_revision===info.planRevision;
     }
+    if(store.selected()?.sessionId!==selected.sessionId||store.selected()?.workspace!==selected.workspace
+      ||store.project(workspace)?.projectId!==project.projectId)
+      throw new Error('Выбранный проект или сессия изменились во время проверки. Повторите переключение.');
     const scope=verified?info.scopeId:null;
     const done=verified&&info.planView?.tasks?.length>0&&info.planView.tasks.every(t=>t.status==='done');
     projectAutoPlan.sync(workspace,scope,{confirmed:verified,complete:done,
