@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1774,
+  "plan_revision": 1776,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -328,8 +328,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T006",
@@ -355,7 +355,8 @@
         "Проверены комплектность, подпись и Kit 1.7.2 без повторной сборки; ограничения native Windows и живого ChatGPT не скрыты."
       ],
       "expected_commit_message": "build: package verified 0.6.113 pair",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -441,7 +442,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1774
+Revision: 1776
 
 ## Цель
 
@@ -496,8 +497,8 @@ Revision: 1774
   - Файлы: docs/architecture/OVERVIEW.md, README.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/release.md, docs/modules/parallel-execution-acceptance.md, docs/planning/archive-deletion-recovery-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T001, T002, T003, T004, T005
-- [TODO] T006: Собрать единственный парный выпуск 0.6.113 — Ожидает
-  - Git Commit: [PENDING] build: package verified 0.6.113 pair
+- [DONE] T006: Собрать единственный парный выпуск 0.6.113 — Завершено
+  - Git Commit: [DONE] build: package verified 0.6.113 pair
   - Reference: autoplan-lifecycle-recovery-20261011 / T006 / implementation
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
