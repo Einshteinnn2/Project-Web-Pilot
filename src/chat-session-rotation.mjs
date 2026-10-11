@@ -5,6 +5,26 @@ const sha = value => typeof value === 'string' && /^[a-f0-9]{40,64}$/.test(value
 const error = (code, message) => Object.assign(new Error(message), { code });
 const copy = value => structuredClone(value);
 
+// Called after the existing AutoPlan eligibility gates and again immediately
+// before Composer click. Checking quota never creates a Chat by itself.
+export function chatRotationDecision({ selected, plan, count, limit, blocked = false }) {
+  if (selected?.experience !== 'chat' || plan?.planExecution?.execution_strategy !== 'sequential')
+    return { status: 'continue' };
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10)
+    return { status: 'wait', reason: 'ROTATION_SETTING_INVALID' };
+  if (blocked) return { status: 'wait', reason: 'MANUAL_STOP' };
+  if (!plan?.confirmed || plan.scopeId !== selected.scopeId || plan.scopeStatus !== 'ACTIVE')
+    return { status: 'wait', reason: 'PLAN_CHANGED_OR_TRANSACTION' };
+  if (!Number.isSafeInteger(count) || count < 0)
+    return { status: 'wait', reason: 'ROTATION_PROOF_ERROR' };
+  if (plan.planView?.tasks?.length > 0 && plan.planView.tasks.every(task => task.status === 'done'))
+    return { status: 'complete' };
+  if (count < limit) return { status: 'continue' };
+  // Boundary is an immutable confirmed task SHA; a plan revision alone is not
+  // a safe idempotency key for the subsequent session handoff.
+  return { status: 'rotate' };
+}
+
 function validateProof(proof) {
   if (!proof || proof.confirmed !== true || !proof.workspace || !proof.projectId || !proof.sessionId || !proof.scopeId
       || proof.experience !== 'chat' || proof.executionStrategy !== 'sequential'

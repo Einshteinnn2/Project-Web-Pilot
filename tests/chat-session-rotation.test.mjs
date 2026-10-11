@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { advanceChatSessionTaskCounter } from '../src/chat-session-rotation.mjs';
+import { advanceChatSessionTaskCounter, chatRotationDecision } from '../src/chat-session-rotation.mjs';
 import { readChatSessionTaskProof } from '../src/auto-plan-state.mjs';
 import { renderPlan } from '@webpilot/workflow-kit/lib/plan';
 
@@ -20,6 +20,25 @@ const proof = (options = {}) => ({
   confirmed:true,workspace:'/fixture',projectId:'project',sessionId:'chat-a',scopeId:'scope',
   experience:'chat',executionStrategy:'sequential',planRevision:1,baselineCommit:base,
   head:prior,done:[],history:initialHistory,...options,
+});
+
+test('T004 decision: quotas 1 and 4, terminal DONE, Work, parallel, Stop and unconfirmed states',()=>{
+ const selected={experience:'chat',scopeId:'scope'};
+ const plan={confirmed:true,scopeId:'scope',scopeStatus:'ACTIVE',planExecution:{execution_strategy:'sequential'},
+   planView:{tasks:[{id:'T001',status:'done'},{id:'T002',status:'pending'}]}};
+ const decide=(count,limit,options={})=>chatRotationDecision({selected,plan,count,limit,...options});
+ assert.equal(decide(0,1).status,'continue');
+ assert.equal(decide(1,1).status,'rotate');
+ assert.equal(decide(3,4).status,'continue');
+ assert.equal(decide(4,4).status,'rotate');
+ assert.equal(decide(5,4).status,'rotate');
+ assert.equal(decide(4,4,{blocked:true}).reason,'MANUAL_STOP');
+ assert.equal(decide(4,4,{plan:{...plan,confirmed:false}}).reason,'PLAN_CHANGED_OR_TRANSACTION');
+ assert.equal(decide(4,4,{plan:{...plan,planView:{tasks:[{id:'T001',status:'done'}]}}}).status,'complete');
+ assert.equal(decide(4,4,{selected:{...selected,experience:'work'}}).status,'continue');
+ assert.equal(decide(4,4,{plan:{...plan,planExecution:{execution_strategy:'parallel'}}}).status,'continue');
+ assert.equal(decide(-1,4).reason,'ROTATION_PROOF_ERROR');
+ assert.equal(decide(4,0).reason,'ROTATION_SETTING_INVALID');
 });
 
 test('a new Chat starts at zero even when the plan already has completed tasks', () => {

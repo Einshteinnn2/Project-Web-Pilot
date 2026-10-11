@@ -157,6 +157,87 @@ test('rotation baseline: four sequential DONE projections still continue in the 
   f.flow.dispose();
 });
 
+test('T004: quota blocks old Continue after idle, reserves the boundary once and retains it after restart',async()=>{
+ const f=fixture({busy:true}),calls=[];
+ let count=3;
+ const boundary='c'.repeat(40);
+ f.flow.checkRotation=async()=>count>=4?{status:'rotate',boundary,count}:{status:'continue'};
+ f.flow.onRotation=async event=>calls.push(event);
+ await f.flow.start();await f.drain();assert.deepEqual(f.sends,[]);
+ count=4;f.plan.planRevision++;
+ await f.flow.planChanged();await f.drain();assert.deepEqual(calls,[],'busy is never interrupted');
+ await f.finish();
+ assert.deepEqual(f.sends,[],'the fourth DONE must not send T005 to old Chat');
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].boundary,boundary);
+ assert.equal(f.flow.view().reason,'ROTATION_PENDING');
+ assert.equal(f.flow.view().enabled,true,'user ON remains ON');
+ assert.equal(f.flow.checkpointState().rotation.status,'notified');
+ await Promise.all([f.flow.planChanged(),f.flow.planChanged(),f.flow.recover()]);await f.drain();
+ assert.equal(calls.length,1,'multiple monitors cannot start two rotations');
+ const saved=f.flow.checkpointState();f.flow.dispose();f.flow.restore(true,saved);
+ await f.flow.recover();await f.drain();
+ assert.equal(calls.length,1);assert.deepEqual(f.sends,[]);
+ assert.equal(f.flow.view().reason,'ROTATION_PENDING');
+});
+
+test('T004: reaching the quota during Composer pre-click check cancels the old Send',async()=>{
+ const f=fixture(),calls=[];let count=3;
+ f.flow.checkRotation=async()=>count>=4?{status:'rotate',boundary:'d'.repeat(40),count}:{status:'continue'};
+ f.flow.onRotation=async data=>calls.push(data);
+ f.setGate(async()=>{count=4;f.plan.planRevision++;});
+ await f.flow.start();await f.drain();
+ assert.deepEqual(f.sends,[]);
+ assert.equal(calls.length,1,'rotation is caught immediately before Send click');
+ assert.equal(f.flow.view().reason,'ROTATION_PENDING');
+ await f.flow.planChanged();await f.drain();
+ assert.equal(calls.length,1);
+});
+
+test('T004: final DONE wins over quota, while draft, Stop, UNKNOWN and missing handoff fail closed',async()=>{
+ const quota=()=>({status:'rotate',boundary:'e'.repeat(40),count:4});
+ const final=fixture();final.flow.checkRotation=async()=>quota();final.flow.onRotation=async()=>assert.fail('finished plan must not rotate');
+ final.plan.planView.tasks.forEach(t=>t.status='done');
+ await final.flow.start();assert.equal(final.flow.view().phase,'complete');assert.deepEqual(final.sends,[]);
+
+ const draft=fixture(),calls=[];draft.flow.checkRotation=async()=>quota();draft.flow.onRotation=async()=>calls.push('rotate');
+ draft.observe({draftPresent:true});await draft.flow.start();await draft.drain();
+ assert.equal(draft.flow.view().reason,'DRAFT_PRESENT');assert.deepEqual(calls,[]);
+ draft.observe({draftPresent:false});await draft.drain();assert.deepEqual(calls,['rotate']);
+
+ const unknown=fixture();unknown.flow.checkRotation=async()=>({status:'continue'});
+ unknown.setResult({state:'unknown'});await unknown.flow.start();
+ unknown.flow.checkRotation=async()=>quota();unknown.flow.onRotation=async()=>assert.fail('UNKNOWN must not rotate');
+ await unknown.flow.planChanged();assert.equal(unknown.flow.view().reason,'SEND_UNKNOWN');
+
+ const stopped=fixture();stopped.flow.checkRotation=async()=>({status:'wait',reason:'MANUAL_STOP'});
+ stopped.flow.onRotation=async()=>assert.fail('manual Stop blocks rotation');
+ await stopped.flow.start();assert.deepEqual(stopped.sends,[]);assert.equal(stopped.flow.view().reason,'MANUAL_STOP');
+
+ const unsupported=fixture();unsupported.flow.checkRotation=async()=>quota();
+ await unsupported.flow.start();assert.deepEqual(unsupported.sends,[]);
+ assert.equal(unsupported.flow.view().reason,'ROTATION_HANDLER_UNAVAILABLE');
+});
+
+test('T004: failed checkpoint or uncertain handoff never retries rotation automatically',async()=>{
+ const boundary='f'.repeat(40);
+ for(const failure of ['checkpoint','handoff']){
+  const f=fixture(),calls=[];
+  f.flow.checkRotation=async()=>({status:'rotate',boundary,count:4});
+  f.flow.onRotation=async()=>{calls.push('called');if(failure==='handoff')throw Error('Failed');};
+  if(failure==='checkpoint')f.flow.saveCheckpoint=async checkpoint=>{
+    if(checkpoint?.rotation)throw Error('Cannot save');
+  };
+  await f.flow.start();await f.drain();
+  assert.equal(f.sends.length,0);
+  assert.equal(f.flow.view().reason,failure==='checkpoint'?'ROTATION_CHECKPOINT_ERROR':'ROTATION_HANDOFF_ERROR');
+  await f.flow.planChanged();await f.drain();
+  if(failure==='handoff'){
+    assert.equal(calls.length,1);assert.equal(f.flow.checkpointState().rotation.status,'reserved');
+  }else assert.deepEqual(calls,[]);
+ }
+});
+
 test.todo('rotation N=1: after the first Git-proven DONE and assistant idle, new Chat receives one Recovery instead of old Continue');
 test.todo('rotation N=4: after four Git-proven DONE, old Chat is blocked and the new Chat starts at zero');
 test.todo('rotation: DOCS and delivery count, but the final DONE completes without another Chat');

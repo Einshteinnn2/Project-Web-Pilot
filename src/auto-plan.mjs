@@ -47,12 +47,14 @@ export function pruneLedger(entries) {
 export class AutoPlan {
   constructor({ selected, inspectPlan, send, onChange = () => {}, log = () => {},
     schedule = setTimeout, cancel = clearTimeout, settleMs = 500, stallMs = 180000,
-    available = () => true, saveCheckpoint = async () => {}, onComplete = () => {} }) {
-    Object.assign(this, { onComplete, selected, inspectPlan, send, onChange, log, schedule, cancel, settleMs, stallMs, available, saveCheckpoint });
+    available = () => true, saveCheckpoint = async () => {}, onComplete = () => {},
+    checkRotation = null, onRotation = null }) {
+    Object.assign(this, { onComplete, selected, inspectPlan, send, onChange, log, schedule, cancel, settleMs, stallMs, available, saveCheckpoint, checkRotation, onRotation });
     this.page = null; this.run = null; this.epoch = 0; this.timer = null; this.watchdog = null;
     this.state = { phase: 'off', message: '', active: false, reason: null };
     this.continuations = 0; this.continuationOwner = null;
     this.enabled = false; this.checkpoints = new Map(); this.cycles = new Map(); this.cyclesDirty = false; this.closed = false;
+    this.rotation = null;
     this.pending = null; this.rerunRequested = false; this.lastAvailability = false;
     this.selectionKey = key(this.selected()); this.manualWaiting = null;
   }
@@ -61,8 +63,8 @@ export class AutoPlan {
     continuations: this.continuationOwner === key(this.selected()) ? this.continuations : 0 }; }
   get checkpoint() { return [...this.checkpoints.values()].findLast(entry => entry.key === key(this.selected())) ?? null; }
   checkpointState(entries = this.checkpoints) {
-    return entries.size || this.cycles.size ? { version: 3, entries: [...entries.values()],
-      cycles: [...this.cycles.values()] } : null;
+    return entries.size || this.cycles.size || this.rotation ? { version: 3, entries: [...entries.values()],
+      cycles: [...this.cycles.values()], ...(this.rotation ? { rotation: this.rotation } : {}) } : null;
   }
   observeCycle(p) {
     const owner = conversationKey(this.selected());
@@ -92,6 +94,10 @@ export class AutoPlan {
   restore(enabled, checkpoint = null) {
     this.epoch++; this.clearTimer(); this.clearWatchdog(); this.run = null; this.manualWaiting = null;
     this.closed = false; this.enabled = enabled === true; this.checkpoints = new Map(); this.cycles = new Map(); this.cyclesDirty = false;
+    const rotation = checkpoint?.rotation;
+    this.rotation = rotation && typeof rotation.key === 'string' && typeof rotation.boundary === 'string'
+      && /^[a-f0-9]{40,64}$/.test(rotation.boundary) && ['reserved','notified'].includes(rotation.status)
+      ? { key: rotation.key, boundary: rotation.boundary, status: rotation.status } : null;
     const entries = [2, 3].includes(checkpoint?.version) && Array.isArray(checkpoint.entries) ? checkpoint.entries : [checkpoint];
     for (const entry of entries) {
       if (entry && typeof entry.key === 'string' && typeof entry.turnId === 'string'
@@ -156,6 +162,32 @@ export class AutoPlan {
     if (this.run) this.run.stallWarning = false;
     this.set('complete', 'Все пункты плана выполнены. Продолжение не отправляется.', false, 'PLAN_COMPLETED');
     this.onComplete();
+  }
+  rotationWait() {
+    return this.pause(this.rotation?.status === 'notified'
+      ? 'Лимит задач Chat достигнут. Переход в новую сессию ожидается.'
+      : 'Переход Chat был подготовлен, но его исход неизвестен. Требуется проверка пользователя.',
+      this.rotation?.status === 'notified' ? 'ROTATION_PENDING' : 'ROTATION_UNKNOWN');
+  }
+  async reserveRotation(owner, decision, ready) {
+    if (!ready()) return;
+    if (this.rotation?.key === owner) return this.rotationWait();
+    if (typeof this.onRotation !== 'function')
+      return this.pause('Автоматическая смена Chat недоступна. Продолжение не отправлено.', 'ROTATION_HANDLER_UNAVAILABLE');
+    const previous = this.rotation;
+    this.rotation = { key: owner, boundary: decision.boundary, status: 'reserved' };
+    try { await this.saveCheckpoint(this.checkpointState()); }
+    catch {
+      this.rotation = previous;
+      return this.pause('Не удалось сохранить запрет отправки в старый Chat.', 'ROTATION_CHECKPOINT_ERROR');
+    }
+    if (!ready()) return this.rotationWait();
+    try { await this.onRotation({ selected: this.selected(), boundary: decision.boundary, count: decision.count }); }
+    catch { return this.pause('Не удалось передать переход в новую Chat-сессию. Проверьте состояние вручную.', 'ROTATION_HANDOFF_ERROR'); }
+    this.rotation.status = 'notified';
+    try { await this.saveCheckpoint(this.checkpointState()); }
+    catch { return this.pause('Переход запущен, но подтверждение его сохранения отсутствует.', 'ROTATION_CHECKPOINT_ERROR'); }
+    this.rotationWait();
   }
   selectionChanged() {
     const selectedKey = key(this.selected());
@@ -281,6 +313,31 @@ export class AutoPlan {
         consumed.status === 'sending' ? 'Исход отправки для этой паузы неизвестен. Повтор не отправляется.'
           : '«Продолжай» уже отправлено. Ждём ответ.', consumed.status === 'sent',
         consumed.status === 'sending' ? 'SEND_UNKNOWN' : 'PAUSE_CONSUMED');
+    if (this.rotation?.key === owner) return this.rotationWait();
+    const checkRotation = async checked => {
+      if (!this.checkRotation) return false;
+      let decision;
+      try { decision = await this.checkRotation(selected, checked); }
+      catch {
+        if (ready()) this.pause('Не удалось проверить подтверждённые задачи Chat. Автопродолжение заблокировано.', 'ROTATION_PROOF_ERROR');
+        return true;
+      }
+      if (!ready()) return true;
+      if (decision?.status === 'continue') return false;
+      if (decision?.status === 'complete') { this.complete(); return true; }
+      if (decision?.status === 'rotate') {
+        if (!/^[a-f0-9]{40,64}$/.test(decision.boundary ?? '')) {
+          this.pause('Нет подтверждённой границы коммита для смены Chat.', 'ROTATION_PROOF_ERROR');
+          return true;
+        }
+        await this.reserveRotation(owner, decision, ready); return true;
+      }
+      this.wait(decision?.reason ?? 'ROTATION_PROOF_ERROR',
+        decision?.reason === 'MANUAL_STOP' ? 'Ручная остановка запрещает смену Chat.'
+          : 'Переход Chat ожидает подтверждения плана или действий пользователя.');
+      return true;
+    };
+    if (await checkRotation(plan)) return;
     if (this.continuationOwner !== owner) { this.continuationOwner = owner; this.continuations = 0; }
     const checkpoint = { key: owner, turnId: pauseId, status: 'sending', generation: cycle?.generation ?? 0 };
     this.log('pause', { turnId: p.turnId || '', identitySource: p.turnId ? 'native' : 'cycle', generation: cycle?.generation ?? 0 });
@@ -302,6 +359,7 @@ export class AutoPlan {
             this.wait('PLAN_CHANGED_OR_TRANSACTION', 'Ждём актуальный текущий план.'); return false;
           }
           if (finished(latest)) { this.complete(); return false; }
+          if (await checkRotation(latest)) return false;
           return !!latest.planView?.tasks?.length;
         });
       }

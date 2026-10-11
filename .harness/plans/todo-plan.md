@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1790,
+  "plan_revision": 1792,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -199,8 +199,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T004",
@@ -230,7 +230,15 @@
         "N DONE блокируют старый Continue до click; работающий busy не прерывается; после idle одна ротация; последний DONE complete без новой сессии; Stop/Send/draft/Review/UNKNOWN защищены."
       ],
       "expected_commit_message": "feat: Блокировать старый Send при достижении порога",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "docs/planning/chat-session-rotation-spec.md",
+        "src/auto-plan.mjs",
+        "src/chat-session-rotation.mjs",
+        "src/project-session-auto-plan.mjs",
+        "tests/auto-plan.test.mjs",
+        "tests/chat-session-rotation.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -546,7 +554,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1790
+Revision: 1792
 
 ## Цель
 
@@ -581,8 +589,8 @@ Revision: 1790
   - Файлы: src/chat-session-rotation.mjs, src/project-auto-plan.mjs, src/auto-plan-state.mjs, tests/chat-session-rotation.test.mjs, tests/project-auto-plan.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T002
-- [TODO] T004: Блокировать старый Send при достижении порога — Ожидает
-  - Git Commit: [PENDING] feat: Блокировать старый Send при достижении порога
+- [DONE] T004: Блокировать старый Send при достижении порога — Завершено
+  - Git Commit: [DONE] feat: Блокировать старый Send при достижении порога
   - Reference: chat-session-rotation-20261011 / T004 / implementation
   - Файлы: src/auto-plan.mjs, src/project-session-auto-plan.mjs, src/chat-session-rotation.mjs, tests/auto-plan.test.mjs, tests/chat-session-rotation.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

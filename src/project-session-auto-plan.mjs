@@ -1,10 +1,12 @@
 import { AutoPlan } from './auto-plan.mjs';
 import { AutomationSendState } from './automation-send-state.mjs';
 import { PlanMonitor } from './plan-monitor.mjs';
+import { chatRotationDecision } from './chat-session-rotation.mjs';
 
 // The same controller runs for visible and hidden main chats. Its sender,
 // watcher, checkpoint and current plan always address its own saved identity.
-export function configureProjectAutoPlan(record,{store,authorization,inspectPlan,onChange,log=()=>{}}) {
+export function configureProjectAutoPlan(record,{store,authorization,inspectPlan,onChange,log=()=>{},
+  inspectTaskProof=null,taskLimit=null,onRotationReady=null}) {
   if(record.primaryAutomation||!record.identity||record.identity.assignmentId)return record.primaryAutomation;
   let monitor,flow;
   const selected=()=>{
@@ -26,7 +28,24 @@ export function configureProjectAutoPlan(record,{store,authorization,inspectPlan
   const automation=new AutomationSendState({save:checkpoint=>save({automationCheckpoint:checkpoint})});
   const complete=()=>{const project=selected();authorization.sync(project.workspace,project.scopeId,
     {complete:true,confirmed:true,planRevision:project.planRevision});};
+  const checkRotation=typeof inspectTaskProof==='function'&&typeof taskLimit==='function'
+    ? async(p,plan)=>{
+      if(p.experience!=='chat'||plan.planExecution?.execution_strategy!=='sequential')return {status:'continue'};
+      if(automation.blocked(p))return {status:'wait',reason:'MANUAL_STOP'};
+      const proof=await inspectTaskProof(p);
+      if(proof?.confirmed!==true || proof.scopeId!==plan.scopeId || proof.planRevision!==plan.planRevision
+        || proof.projectId!==p.projectId || proof.sessionId!==p.sessionId)
+        return {status:'wait',reason:'ROTATION_PROOF_ERROR'};
+      const result=authorization.recordTaskProof(p.workspace,p.sessionId,proof);
+      if(result?.recorded!==true)return {status:'wait',reason:'ROTATION_PROOF_ERROR'};
+      const decision=chatRotationDecision({selected:p,plan,count:result.count,limit:taskLimit(),
+        blocked:automation.blocked(p)});
+      if(decision.status!=='rotate')return decision;
+      const boundary=authorization.checkpoint(p.workspace,p.scopeId,p.sessionId).chatTaskCursor?.counted?.at(-1)?.sha;
+      return {...decision,boundary,count:result.count};
+    }:null;
   flow=new AutoPlan({selected,inspectPlan,log,onChange,onComplete:complete,
+    checkRotation,onRotation:onRotationReady,
     available:()=>{const p=selected();return !!p&&!p.archivedAt&&!p.sessionArchivedAt&&!record.disposed&&record.ready&&!record.loading
       &&!record.composer.inFlight&&!record.controller.pending&&permitted(p)&&!!monitor?.view(record.project())&&!monitor.error
       &&p.planExecution?.execution_strategy!=='parallel'&&['delivered','stale','manual-session'].includes(record.controller.state.phase);},
