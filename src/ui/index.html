@@ -326,6 +326,13 @@ SOFTWARE.
           <p id="parallel-settings-help" class="settings-help">Применяется только к новым сессиям. Агент определит, полезно ли выполнять задачи параллельно.</p>
           <p id="parallel-settings-error" class="settings-help" role="alert" hidden></p>
         </section>
+        <section class="settings-section" aria-labelledby="auto-plan-settings-title">
+          <h3 id="auto-plan-settings-title">AutoPlan — Chat-сессии</h3>
+          <label for="chat-session-task-limit">Микрозадач на Chat-сессию</label>
+          <input id="chat-session-task-limit" type="number" min="1" max="10" step="1" value="4" inputmode="numeric" aria-describedby="chat-session-task-limit-help chat-session-task-limit-error">
+          <p id="chat-session-task-limit-help" class="settings-help">При включённом AutoPlan новая Chat-сессия создаётся после N выполненных задач. На Work не влияет.</p>
+          <p id="chat-session-task-limit-error" class="settings-help" role="alert" hidden></p>
+        </section>
         <section id="doctor-panel" class="settings-section" aria-label="Доктор проекта">
           <p class="eyebrow">Доктор проекта</p>
           <label for="doctor-workspace">Проект для проверки</label><select id="doctor-workspace"></select>

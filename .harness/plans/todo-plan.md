@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1786,
+  "plan_revision": 1788,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -114,8 +114,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T002",
@@ -146,7 +146,15 @@
         "Settings и IPC: 1–10, default 4, persisted restart, неверный ввод fail closed, подсказка Chat при ON; установка N не включает AutoPlan."
       ],
       "expected_commit_message": "feat: Добавить лимит микрозадач Chat в Settings",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "src/chat-session-rotation-settings.mjs",
+        "src/main.mjs",
+        "src/preload.cjs",
+        "src/ui/index.html",
+        "src/ui/settings-panel.mjs",
+        "tests/settings-chat-session-rotation.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -530,7 +538,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1786
+Revision: 1788
 
 ## Цель
 
@@ -553,8 +561,8 @@ Revision: 1786
   - Файлы: tests/auto-plan.test.mjs, tests/project-auto-plan.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: нет
-- [TODO] T002: Добавить лимит микрозадач Chat в Settings — Ожидает
-  - Git Commit: [PENDING] feat: Добавить лимит микрозадач Chat в Settings
+- [DONE] T002: Добавить лимит микрозадач Chat в Settings — Завершено
+  - Git Commit: [DONE] feat: Добавить лимит микрозадач Chat в Settings
   - Reference: chat-session-rotation-20261011 / T002 / implementation
   - Файлы: src/chat-session-rotation-settings.mjs, src/main.mjs, src/preload.cjs, src/ui/settings-panel.mjs, src/ui/index.html, tests/settings-chat-session-rotation.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

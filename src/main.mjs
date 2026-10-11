@@ -18,6 +18,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WorkspaceSessions, normalizeChatUrl, activeSessionsNewestFirst } from './workspace-session.mjs';
 import { DEFAULT_PARALLEL_SETTINGS, validateParallelSettings } from './parallel-settings.mjs';
+import { DEFAULT_CHAT_SESSION_TASK_LIMIT, restoreChatSessionTaskLimit, validateChatSessionTaskLimit } from './chat-session-rotation-settings.mjs';
 import { installChatGPTAutoScroll } from './chatgpt-auto-scroll.mjs';
 import { ChatColors, normalizeChatColors, validateColorChange, DEFAULT_COLORS } from './chatgpt-colors.mjs';
 import { ChatColorsWindow } from './chat-colors-window.mjs';
@@ -64,6 +65,7 @@ const dataDir = app.getPath('userData');
 const settingsFile = path.join(dataDir, 'settings.json');
 const chromiumDiagnosticsFile = path.join(dataDir, 'diagnostics', 'chromium-events.jsonl');
 let parallelExecution = { ...DEFAULT_PARALLEL_SETTINGS };
+let chatSessionTaskLimit = DEFAULT_CHAT_SESSION_TASK_LIMIT;
 let parallelExecutionBook = {};
 const store = new WorkspaceSessions(path.join(dataDir, 'workspaces.json'), { getExecutionSettings: () => parallelExecution });
 const planMonitor = new PlanMonitor({ selected: () => store.selected(),
@@ -368,7 +370,7 @@ function saveSettings(overrides = {}) {
     ...(process.platform === 'darwin' ? { macRuntimeMode: 'app-server' } : {}),
     [legacyRetiredSetting]: legacyRuntimeRetired, ...(legacyRuntimeRetired ? {} : { legacyRuntimeRoots }),
   };
-  const settings = { ...platformSettings, chatgptChannel, shellTheme, hideToolCalls, sidebarWidth, chatColors, projectsParent, projectAutoPlan:projectAutoPlan.snapshot(), reviewCheckpoint, automationCheckpoint, parallelExecution, parallelExecutionBook, ...overrides };
+  const settings = { ...platformSettings, chatgptChannel, shellTheme, hideToolCalls, sidebarWidth, chatColors, projectsParent, projectAutoPlan:projectAutoPlan.snapshot(), reviewCheckpoint, automationCheckpoint, parallelExecution, chatSessionTaskLimit, parallelExecutionBook, ...overrides };
   const operation = settingsSaveTail.catch(() => {}).then(async () => {
     await fsp.mkdir(dataDir, { recursive: true, mode: 0o700 });
     await fsp.writeFile(settingsFile + '.tmp', JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 });
@@ -469,7 +471,7 @@ function snapshot() {
     executorRecovery:projects.filter(p=>p.parentWorkspace&&!projects.some(parent=>parent.workspace===p.parentWorkspace&&parent.projectId===p.parentProjectId))
       .map(p=>({workspace:p.workspace,projectId:p.projectId,name:p.displayName||p.name,
         message:'Связь с родителем не подтверждена. Для отсутствующих папок можно убрать только локальную запись. Облачные чаты ChatGPT сохраняются.'})),
-    archives: projectedArchives(), settings: settingsState, doctor: doctorState, parallelExecution: { ...parallelExecution },
+    archives: projectedArchives(), settings: settingsState, doctor: doctorState, parallelExecution: { ...parallelExecution }, chatSessionTaskLimit,
     execution: {...execution.view(saved?.parentWorkspace??saved?.workspace),commands:(execution.view(saved?.parentWorkspace??saved?.workspace).commands??[])
       .map(c=>({...c,projectId:store.project(c.workspace)?.projectId}))},
     conversationRecovery: conversationRecovery?.view() ?? { phase: 'idle', message: '', canRetry: false },
@@ -1217,6 +1219,13 @@ function registerIpc() {
     await saveSettings({ parallelExecution: next });
     parallelExecution = next;
   });
+  registerAction('pilot:set-chat-session-task-limit', async input => {
+    if (!settingsState) throw new Error('Откройте настройки.');
+    const next = validateChatSessionTaskLimit(input);
+    if (next === chatSessionTaskLimit) return;
+    await saveSettings({ chatSessionTaskLimit: next });
+    chatSessionTaskLimit = next;
+  });
   registerAction('pilot:clear-orphan-executor', async input => {
     if (!settingsState) throw new Error('Откройте Настройки для восстановления записи исполнителя.');
     const expected=await deletion.inspectOrphan(input);
@@ -1640,6 +1649,7 @@ else {
       if (['light', 'dark'].includes(settings.shellTheme)) shellTheme = settings.shellTheme;
       if (typeof settings.hideToolCalls === 'boolean') hideToolCalls = settings.hideToolCalls;
       parallelExecution = validateParallelSettings(settings.parallelExecution);
+      chatSessionTaskLimit = restoreChatSessionTaskLimit(settings);
       if(settings.parallelExecutionBook&&typeof settings.parallelExecutionBook==='object'&&!Array.isArray(settings.parallelExecutionBook))
         parallelExecutionBook=settings.parallelExecutionBook;
       const restored=new ProjectAutoPlan({saved:settings.projectAutoPlan});projectAutoPlan.book=restored.snapshot();

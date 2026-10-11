@@ -1,5 +1,6 @@
 import { projectDoctorView } from './project-doctor.mjs';
 import { DEFAULT_PARALLEL_SETTINGS, validateParallelSettings } from '../parallel-settings.mjs';
+import { DEFAULT_CHAT_SESSION_TASK_LIMIT, validateChatSessionTaskLimit } from '../chat-session-rotation-settings.mjs';
 
 function vpsLine(vps) {
   if (!vps) return 'Состояние VPS ещё не проверено.';
@@ -42,6 +43,19 @@ export function settingsPanelView(action) {
   };
   parallelToggle.addEventListener('change', saveParallel);
   parallelLimit.addEventListener('change', saveParallel);
+  const chatTaskLimit = $('chat-session-task-limit');
+  chatTaskLimit.addEventListener('change', () => {
+    try {
+      const value = validateChatSessionTaskLimit(chatTaskLimit.valueAsNumber);
+      $('chat-session-task-limit-error').hidden = true;
+      chatTaskLimit.removeAttribute('aria-invalid');
+      action('setChatSessionTaskLimit', value);
+    } catch (error) {
+      $('chat-session-task-limit-error').textContent = error.message;
+      $('chat-session-task-limit-error').hidden = false;
+      chatTaskLimit.setAttribute('aria-invalid', 'true');
+    }
+  });
   $('chatgpt-channel-secure').addEventListener('click', () => action('setChatgptChannel', 'secure-tunnel'));
   $('chatgpt-channel-vps').addEventListener('click', () => action('setChatgptChannel', 'vps'));
   $('chatgpt-channel-refresh').addEventListener('click', () => action('refreshChatgptChannel'));
@@ -64,6 +78,9 @@ export function settingsPanelView(action) {
     $('parallel-options').hidden = !parallel.parallel_allowed;
     parallelLimit.disabled = pending || !parallel.parallel_allowed;
     if (document.activeElement !== parallelLimit) parallelLimit.value = String(parallel.max_workers);
+    chatTaskLimit.disabled = pending;
+    if (document.activeElement !== chatTaskLimit)
+      chatTaskLimit.value = String(state.chatSessionTaskLimit ?? DEFAULT_CHAT_SESSION_TASK_LIMIT);
     // One pair of sections for both systems: the same executor, the same services, the same two channels.
     const isMac = state.platform === 'darwin', isWindows = state.platform === 'win32';
     const supported = isMac || isWindows, system = isWindows ? 'Windows' : 'macOS';
