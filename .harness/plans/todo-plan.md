@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1776,
+  "plan_revision": 1778,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -359,8 +359,8 @@
       "actual_files": []
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T007",
@@ -386,7 +386,8 @@
         "Работающее приложение принудительно не перезапускать; чистую ОС подтверждает только пользователь."
       ],
       "expected_commit_message": "release: install verified macOS 0.6.113",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -442,7 +443,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1776
+Revision: 1778
 
 ## Цель
 
@@ -503,8 +504,8 @@ Revision: 1776
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
   - Зависимости: T005, DOCS
-- [TODO] T007: Установить готовый macOS выпуск без пересборки — Ожидает
-  - Git Commit: [PENDING] release: install verified macOS 0.6.113
+- [DONE] T007: Установить готовый macOS выпуск без пересборки — Завершено
+  - Git Commit: [DONE] release: install verified macOS 0.6.113
   - Reference: autoplan-lifecycle-recovery-20261011 / T007 / implementation
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
