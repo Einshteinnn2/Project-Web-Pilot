@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1806,
+  "plan_revision": 1808,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -528,8 +528,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T009",
@@ -553,7 +553,8 @@
         "После DOCS одна paired-release macOS arm64 + Windows x64, все артефакты в ~/Downloads, sourceCommit и подпись проверены, без изменения исходников."
       ],
       "expected_commit_message": "release: Собрать единственный парный выпуск 0.6.114",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -637,7 +638,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1806
+Revision: 1808
 
 ## Цель
 
@@ -714,8 +715,8 @@ Revision: 1806
   - Файлы: docs/planning/chat-session-rotation-spec.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/context-delivery.md, docs/modules/workspace-sessions.md, docs/modules/session-runtime.md, docs/modules/workspace-sidebar-ui.md, docs/architecture/OVERVIEW.md, README.md, docs/modules/release.md
   - Параллельность: исключительное выполнение
   - Зависимости: T001, T002, T003, T004, T005, T006, T007, T007A, T008
-- [TODO] T009: Собрать единственный парный выпуск 0.6.114 — Ожидает
-  - Git Commit: [PENDING] release: Собрать единственный парный выпуск 0.6.114
+- [DONE] T009: Собрать единственный парный выпуск 0.6.114 — Завершено
+  - Git Commit: [DONE] release: Собрать единственный парный выпуск 0.6.114
   - Reference: chat-session-rotation-20261011 / T009 / implementation
   - Файлы: docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
