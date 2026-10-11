@@ -1,6 +1,6 @@
 # Краткая архитектура проекта
 
-Стек: Workflow Kit 1.7.2, Electron 44.5.1, Node 24.21.0. Последний опубликованный выпуск — **0.6.110**; версия **0.6.111** уже зафиксирована в `package.json`/`package-lock.json` и Git (`T007`), но **пока не собрана, не установлена и не опубликована**. Установка — [README](../../README.md), работа — current plan и Git, доказательства следующего выпуска — его `release-manifest.json` и GitHub Release только после выполнения соответствующих delivery-задач. Постоянные ограничения — [AGENTS.md](../../AGENTS.md).
+Стек: Workflow Kit 1.7.2, Electron 44.5.1, Node 24.21.0. Последний опубликованный выпуск — **0.6.110**. В `package.json`/`package-lock.json` и Git зафиксирована **0.6.112**, но сборка, установка и публикация ещё не выполнялись; промежуточная 0.6.111 не выпускалась. Установка — [README](../../README.md), работа — current plan и Git; свидетельства выпуска появятся в `release-manifest.json` и GitHub Release после delivery. Постоянные ограничения — [AGENTS.md](../../AGENTS.md).
 
 ## Назначение
 
@@ -28,7 +28,7 @@ Electron-приложение для macOS и Windows: одно окно, сле
 | DOM ChatGPT | `chatgpt-dom/composer/experience`, `chatgpt-page-observer`, `page-state` | [chatgpt-dom-compatibility](../modules/chatgpt-dom-compatibility.md) |
 | Диагностика | `chromium-diagnostics`, `startup-network-trace` | [chromium-diagnostics](../modules/chromium-diagnostics.md) |
 | Подготовка проекта | `workspace-setup`, `ui/workspace-setup`, `resources/workspace-setup-worker.mjs` | [workspace-setup](../modules/workspace-setup.md) |
-| Архив | `workspace-deletion`, `archive-preload.cjs`, `ui/archive*` | [project-archive](../modules/project-archive.md) |
+| Архив и адресная очистка | `workspace-deletion`, `project-state-cleanup`, `archive-preload.cjs`, `ui/archive*` | [project-archive](../modules/project-archive.md) |
 | Доктор | `project-doctor`, `ui/project-doctor`, `resources/project-doctor*` | [project-doctor](../modules/project-doctor.md) |
 | Первый запуск | `browser-startup`, `startup-readiness`, `ui/startup` | [first-run-onboarding](../modules/first-run-onboarding.md) |
 | Службы | `mac-runtime-switch`, `windows-runtime`, `vps-tunnel`, `zip-archive`, `control.py`, `resources/runtime-control/` | [runtime-lifecycle](../modules/runtime-lifecycle.md) |
@@ -63,7 +63,7 @@ Web Pilot Sidebar — отдельный репозиторий; публичн�
 
 ## Проверки и документы
 
-`npm start` запускает исходники; `npm test` — Node suite; `npm run smoke` — Electron TEST FIXTURE; `npm run build` — парный выпуск macOS arm64 + Windows x64. Назначенные `verification_ids` запускает Kit при `commit`. Для версии **0.6.111** версия приложения и lockfile предварительно зафиксированы отдельной задачей **T007** с проверкой `release-source`: `releaseAll` отказывает на незакоммиченных `package*.json`, в том числе когда они только добавлены в candidate коммита сборки. Затем **DOCS-2** фиксирует этот контракт перед выпуском; **T010** — единственная задача, чей commit запускает `paired-release`, после неё **T008** устанавливает готовый пакет и **T009** сверяет GitHub без пересборки. `sourceCommit` — HEAD перед сборкой, то есть уже закоммиченная версия и DOCS-2, но не последующий коммит T010. Нельзя запускать build вручную или обходить Git hooks. Порядок и ограничения — [release](../modules/release.md).
+`npm start` запускает исходники; `npm test` — Node suite; `npm run smoke` — Electron TEST FIXTURE; `npm run build` — парный выпуск macOS arm64 + Windows x64. Назначенные `verification_ids` запускает Kit при `commit`. Для **0.6.112** задача **T006** закрепила package manifests и проверку `release-source`; затем **DOCS** фиксирует контракты, **T007** — единственный `paired-release`, **T008** — установка готового пакета, **T009** — сверка GitHub без пересборки. `releaseAll` отказывает на незакоммиченных `package*.json`. `sourceCommit` — HEAD после DOCS, непосредственно перед сборкой, а не последующий сборочный коммит. Вручную build и обход Git hooks запрещены. Контракт — [release](../modules/release.md).
 
 Fixtures не подтверждают живой ChatGPT, native Windows или чистую ОС; это [пользовательская приёмка](../modules/parallel-execution-acceptance.md). [Отложенный аудит](../modules/technical-audit-followups.md) в выпуск не входит.
 
@@ -71,7 +71,7 @@ README — для пользователя; OVERVIEW — карта; docs/module
 
 Сайдбар показывает дерево только выбранного проекта; поиск и фоновые статусы доступны в меню проектов. Смена проекта возвращает его последнюю выбранную сессию, не меняет cwd и работу фоновых страниц. Настройки доступны сверху рядом с номером версии; постоянного блока контекста и повтора пакета в начатый чат нет.
 
-Окончательное удаление координирует WorkspaceDeletion, очередь execution и project-state-cleanup. Исполнители принадлежат parentProjectId и parentWorkspace, legacy требует доказательств назначения/Git; непривязанные записи видны только как восстановление. Журнал удаляет лишь проверенных детей, защищает соседей/подмены/изменённые worktree и блокируется живой либо неизвестной командой. Новый projectId по тому же пути ничего не наследует; архив сохраняет данные, облачные чаты не удаляются.
+Окончательное удаление координируют `WorkspaceDeletion`, очередь execution, `WorkspaceSessions` и `project-state-cleanup`. Существующий `confirmed`-журнал допускает доведение метаданных, когда исходная папка и карантин уже исчезли, только после проверки identity, опорного каталога/тома и занятости. Пересекающиеся журналы parent/child можно завершать в любом порядке, включая исчезнувшую hashed group; повтор идемпотентен. Worktree принадлежат точным parentProjectId/parentWorkspace и assignment/Git proof; чужие, dirty, UNKNOWN и заменённые папки защищены. Записи с отсутствующим родителем остаются в recovery: только пользователь из Settings может подтвердить адресную очистку после повторных проверок, не по одному ENOENT. Соседи, новый projectId на старом пути и облачные чаты сохраняются ([архив](../modules/project-archive.md), [сессии](../modules/workspace-sessions.md), [UI](../modules/workspace-sidebar-ui.md)).
 
 ## Отложенные решения
 

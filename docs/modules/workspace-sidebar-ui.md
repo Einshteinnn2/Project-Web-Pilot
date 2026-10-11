@@ -7,7 +7,7 @@
 - `src/ui/index.html` — разметка и CSS сайдбара (токены `--tree-*`, светлая/тёмная тема), `<dialog id="rename-dialog">`, splitter.
 - `src/ui/sidebar.mjs` — меню проектов, дерево выбранного родителя, меню сессий, переименование, splitter, часы и адресные уведомления.
 - `src/ui/progress.mjs` — `operationLabel`, `createProgress` (сайдбар и окно архива).
-- `src/ui/settings-panel.mjs` — `settingsPanelView`: тема, вызовы инструментов, канал ChatGPT, «Цвета чата…», «Архив…», Доктор. Действия архива идут только каналами `archive:*` окна архива (`assertArchiveSender`).
+- `src/ui/settings-panel.mjs` — `settingsPanelView`: тема, вызовы инструментов, канал ChatGPT, «Цвета чата…», «Архив…», Доктор и восстановление потерянных исполнителей. Действия архива идут только каналами `archive:*` окна архива (`assertArchiveSender`); очистка одной orphan-записи идёт через отдельный `pilot:clear-orphan-executor` со строгой проверкой `assertLocalSender`.
 - `src/preload.cjs` — `window.webPilot` (узкие методы, по одному IPC `pilot:*`); IPC принимается только от mainFrame сайдбара с его file-URL (`assertLocalSender`, иначе `IPC_FORBIDDEN`).
 - `src/chat-colors-window.mjs` (`ChatColorsWindow.open/close/publish`), `src/chat-colors-preload.cjs`, `src/ui/chat-colors.{html,mjs}` — редактор цветов; `src/chatgpt-colors.mjs` — `ChatColors.set/apply/dispose`, `normalizeChatColors`, `validateColorChange`, `DEFAULT_COLORS`.
 - `src/main.mjs` — `BaseWindow`, `layout`, `clampedSidebarWidth`, `saveSettings`, `applyShellTheme`, обработчики `pilot:set-sidebar-width|set-theme|copy-workspace-path|copy-external-client-line|open-chat-colors`.
@@ -72,6 +72,8 @@ Settings → «Оформление»: «Светлая»/«Тёмная» (`pil
 ## Settings
 
 Панель заменяет дерево: «Доктор проекта» ([project-doctor.md](project-doctor.md)); «Оформление» — тема и «Цвета чата…»; «Интерфейс ChatGPT» — «Скрывать/Показывать» вызовы инструментов (`hideToolCalls`, по умолчанию скрывать, без перезагрузки; поведение фильтра — chatgpt-dom-compatibility); «Локальные инструменты» и «Подключение ChatGPT» (Secure MCP Tunnel / VPS; VPS недоступен, пока свой сервер не готов; детали — [runtime-lifecycle.md](runtime-lifecycle.md)); «Архив…» ([project-archive.md](project-archive.md)). Открытие Settings ничего не ремонтирует; закрытие возвращает к уже загруженной странице без перезагрузки.
+
+**Восстановление исполнителей.** `snapshot().executorRecovery` — только child без подтверждённого живого parentWorkspace/parentProjectId; в обычном дереве такие записи не появляются. В секции `#executor-recovery` показываются имя, точный путь, причина и отдельная кнопка **«Убрать запись»**; `#executor-recovery-items` обновляется без перезапуска. Кнопка активна лишь в открытых Настройках без pending-операции и передаёт в `webPilot.clearOrphanExecutor({workspace,projectId})` только эти два поля. Main повторно проверяет отсутствующие каталоги/том, pending-журналы (включая `related[]`), busy/UNKNOWN и локальный реестр, затем предлагает нативный диалог с безопасной отменой по умолчанию. Успех удаляет только локальные данные; реальный worktree, браузерный профиль и облачные чаты не трогаются. Отказ и причина видны в баннере; сохранённая запись остаётся доступной для адресного восстановления. Контракт и ошибки — [архив проектов](project-archive.md).
 
 ## settings.json
 

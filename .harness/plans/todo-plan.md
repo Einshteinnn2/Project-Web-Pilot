@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1750,
+  "plan_revision": 1752,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -340,8 +340,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "DOCS",
@@ -375,7 +375,16 @@
       ],
       "verification_ids": [],
       "expected_commit_message": "docs: актуализировать документацию проекта",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "README.md",
+        "docs/architecture/OVERVIEW.md",
+        "docs/modules/chromium-diagnostics.md",
+        "docs/modules/project-archive.md",
+        "docs/modules/workspace-sessions.md",
+        "docs/modules/workspace-sidebar-ui.md",
+        "docs/planning/archive-deletion-recovery-spec.md"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -491,7 +500,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1750
+Revision: 1752
 
 ## Цель
 
@@ -546,8 +555,8 @@ Revision: 1750
   - Файлы: package.json, package-lock.json, .harness/workflow.json, docs/modules/release.md
   - Параллельность: исключительное выполнение
   - Зависимости: T005
-- [TODO] DOCS: Актуализация всех документов проекта — Ожидает
-  - Git Commit: [PENDING] docs: актуализировать документацию проекта
+- [DONE] DOCS: Актуализация всех документов проекта — Завершено
+  - Git Commit: [DONE] docs: актуализировать документацию проекта
   - Reference: archive-deletion-recovery-20261011 / DOCS / implementation
   - Файлы: docs/architecture/OVERVIEW.md, docs/planning/archive-deletion-recovery-spec.md, README.md, docs/modules/project-archive.md, docs/modules/workspace-sessions.md, docs/modules/workspace-sidebar-ui.md, docs/modules/chromium-diagnostics.md, docs/modules/release.md
   - Параллельность: исключительное выполнение

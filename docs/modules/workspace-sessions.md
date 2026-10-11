@@ -2,7 +2,7 @@
 
 Модуль ведёт локальный реестр проектов и их сессий: хранилище, жизненный цикл сессий, тип Chat/Work, привязку URL разговора, имена и синхронизацию названия с ChatGPT, время агента, архив сессий. Сессия — один облачный разговор ChatGPT и его навигация; план проекта ей не принадлежит.
 
-Не входит: план и его показ ([plan-view.md](plan-view.md), Kit), сборка и доставка recovery ([context-delivery.md](context-delivery.md)), DOM ChatGPT ([chatgpt-dom-compatibility.md](chatgpt-dom-compatibility.md)), вид дерева и окна ([workspace-sidebar-ui.md](workspace-sidebar-ui.md)), архив и удаление проектов ([project-archive.md](project-archive.md)), путь открытия и readiness ([session-opening-performance.md](session-opening-performance.md)). Модель, reasoning, лимиты OpenAI, MCP и туннель модуль не трогает.
+Границы модуля: план — [plan-view](plan-view.md), recovery — [context-delivery](context-delivery.md), DOM — [chatgpt-dom](chatgpt-dom-compatibility.md), UI — [sidebar](workspace-sidebar-ui.md), удаление проектов — [archive](project-archive.md), готовность страницы — [opening](session-opening-performance.md). Модель, лимиты OpenAI, MCP и туннель не затрагиваются.
 
 ## Код
 
@@ -101,7 +101,7 @@
 
 ## Принадлежность исполнителей
 
-`ownedExecutor` связывает parentProjectId + parentWorkspace. Legacy требует assignment/Git proof, иначе запись только в восстановлении. Выбор чужого родителя запрещён, архив допускает свои фоновые записи. Каскад адресный. Git использует платформенное окружение, включая bundled Windows Git. [Полный контракт](parallel-execution.md).
+`ownedExecutor` сверяет parentProjectId/parentWorkspace; legacy без Git/assignment proof остаётся в `recovery`. `forgetDeletedProject` адресно убирает своих детей из `related[]`. `forgetOrphanExecutor({workspace,projectId,parentWorkspace,parentProjectId,sessionIds})` удаляет ровно одну запись атомарной мутацией после проверок Main; изменение родителя, ID или сессий → `EXECUTOR_RECORD_CHANGED`. Папки и облачные чаты сохраняются. [Условия](project-archive.md).
 
 ## Открыто
 
