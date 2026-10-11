@@ -4,12 +4,12 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1778,
+  "plan_revision": 1780,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
   "execution_scope_status": "ACTIVE",
-  "delivery_status": "IN_PROGRESS",
+  "delivery_status": "READY_FOR_ACCEPTANCE",
   "objective": "Автовыполнение сохраняет явный ON до первого плана и без повторного переключения возобновляет незавершённый план в восстановленной основной сессии; подтверждено end-to-end fixtures и парным выпуском.",
   "acceptance_criteria": [
     "Включённое до планирования AutoPlan не выключается после создания ACTIVE и начинает выполнение после первого пригодного ответа без второго клика.",
@@ -390,8 +390,8 @@
       "actual_files": []
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T008",
@@ -417,7 +417,8 @@
         "Названы живые шаги приёмки ON до плана и ON после Recovery, ограничения macOS/Windows; план оставлен READY_FOR_ACCEPTANCE."
       ],
       "expected_commit_message": "release: publish verified 0.6.113 assets",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": []
     }
   ],
   "blocked_reason": null,
@@ -440,10 +441,10 @@
 ## Состояние
 
 Execution Scope Status: ACTIVE
-Delivery Status: IN_PROGRESS
+Delivery Status: READY_FOR_ACCEPTANCE
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1778
+Revision: 1780
 
 ## Цель
 
@@ -510,8 +511,8 @@ Revision: 1778
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
   - Зависимости: T006, DOCS
-- [TODO] T008: Опубликовать и сверить GitHub Release 0.6.113 — Ожидает
-  - Git Commit: [PENDING] release: publish verified 0.6.113 assets
+- [DONE] T008: Опубликовать и сверить GitHub Release 0.6.113 — Завершено
+  - Git Commit: [DONE] release: publish verified 0.6.113 assets
   - Reference: autoplan-lifecycle-recovery-20261011 / T008 / implementation
   - Файлы: release-manifest.json
   - Параллельность: исключительное выполнение
