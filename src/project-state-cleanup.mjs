@@ -4,14 +4,22 @@ import { queueDiagnosticFile } from './common.mjs';
 
 // Match complete values (also inside nested JSON delivery keys), never name substrings.
 export function belongsToProject(value, identities) {
-  const tokens=new Set(identities.flatMap(p=>[p.workspace,p.projectId,...(p.sessionIds??[])]).filter(Boolean));
+  // A Git worktree may share its parent's project_id. Its workspace and
+  // session IDs, not project_id in isolation, establish the deletion owner.
+  const tokens=new Set(identities.flatMap(p=>[p.workspace,...(p.sessionIds??[])]).filter(Boolean));
   const matches=value=>{
     if(typeof value==='string') {
       if(tokens.has(value))return true;
       try {const parsed=JSON.parse(value);return typeof parsed!=='string'&&matches(parsed);}catch{return false;}
     }
     if(Array.isArray(value))return value.some(matches);
-    return value&&typeof value==='object'&&Object.entries(value).some(([k,v])=>matches(k)||matches(v));
+    if(value&&typeof value==='object') {
+      const owner=identities.find(p=>p.workspace===value.workspace);
+      if(owner&&value.projectId&&owner.projectId&&value.projectId!==owner.projectId)
+        return false; // replacement at the same path is not the deleted project.
+      return Object.entries(value).some(([k,v])=>matches(k)||matches(v));
+    }
+    return false;
   };
   return !!matches(value);
 }
@@ -19,7 +27,12 @@ export function belongsToProject(value, identities) {
 export function removeProjectSettings(settings, identities) {
   const result=structuredClone(settings);
   for(const field of ['projectAutoPlan','parallelExecutionBook'])if(result[field])
-    result[field]=Object.fromEntries(Object.entries(result[field]).filter(entry=>!belongsToProject(entry,identities)));
+    result[field]=Object.fromEntries(Object.entries(result[field]).filter(([key,value])=>{
+      const workspace=field==='projectAutoPlan'?key:value?.workspace;
+      const owner=identities.find(p=>p.workspace===workspace);
+      if(owner&&value?.projectId&&owner.projectId&&value.projectId!==owner.projectId)return true;
+      return !belongsToProject([key,value],identities);
+    }));
   for(const field of ['reviewCheckpoint','automationCheckpoint'])if(result[field])
     for(const [key,value] of Object.entries(result[field]))if(Array.isArray(value))
       result[field][key]=value.filter(entry=>!belongsToProject(entry,identities));

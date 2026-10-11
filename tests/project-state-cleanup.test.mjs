@@ -21,6 +21,26 @@ test('project cleanup removes exact nested delivery owners, preserves neighbours
   assert.equal(belongsToProject('/projects/a extra',ids),false);
 });
 
+test('a shared parent/worktree projectId and a replaced path do not transfer deletion ownership',()=>{
+  const parent='/projects/parent',child='/projects/.web-pilot-worktrees/group/child',id='same-project-id';
+  const samePathNew={workspace:child,projectId:'new-project-id',sessionId:'new-session'};
+  const settings={projectAutoPlan:{[parent]:{projectId:id,enabled:true},
+      [child]:{projectId:id,enabled:true},'/projects/other':{enabled:true}},
+    parallelExecutionBook:{parent:{workspace:parent,projectId:id},
+      child:{workspace:child,projectId:id},replacement:{workspace:child,projectId:'new-project-id'},
+      other:{workspace:'/projects/other'}},
+    reviewCheckpoint:{entries:[{key:JSON.stringify([child,'deleted-session'])},
+      {key:JSON.stringify([parent,'parent-session'])},{workspace:child,projectId:'new-project-id',sessionId:'new-session'}]},
+    automationCheckpoint:{entries:[{sessionId:'deleted-session'},{sessionId:'parent-session'},samePathNew]}};
+  const next=removeProjectSettings(settings,[{workspace:child,projectId:id,sessionIds:['deleted-session']}]);
+  assert.deepEqual(Object.keys(next.projectAutoPlan),[parent,'/projects/other']);
+  assert.deepEqual(Object.keys(next.parallelExecutionBook),['parent','replacement','other']);
+  assert.deepEqual(next.reviewCheckpoint.entries,[{key:JSON.stringify([parent,'parent-session'])},
+    {workspace:child,projectId:'new-project-id',sessionId:'new-session'}]);
+  assert.deepEqual(next.automationCheckpoint.entries,[{sessionId:'parent-session'},samePathNew]);
+  assert.equal(belongsToProject(id,[{workspace:child,projectId:id,sessionIds:[]}]),false);
+});
+
 test('durable cleanup includes settings migration copies, interrupted writes and diagnostic session IDs, preserving browser data',async t=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'project-cleanup-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));
   const ids=[{workspace:'/projects/a',projectId:'id-a',sessionIds:['session-a']}];

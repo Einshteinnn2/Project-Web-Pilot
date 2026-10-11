@@ -87,6 +87,25 @@ test('characterization: five missing executor folders remain recovery records af
   // assert.equal(restarted.project(neighbour.workspace).sessionId,neighbourBefore.sessionId);
 });
 
+test('forgetDeletedProject handles a child already removed by its own confirmed journal without touching siblings',async t=>{
+  const {project,store}=await fixture(t);
+  const origin=await store.select(await project('Parent','shared-id'));
+  const child=await fs.realpath(await project('Child','shared-id'));
+  const foreign=await store.select(await project('Neighbour','neighbour-id'));
+  const assigned=await store.ensureExecutor({id:'assigned-child',worktree:child,parent_root:origin.workspace,
+    parent_scope_id:'fixture-scope',parent_task_id:'T001',title:'Owned'},origin);
+  const childRecord=store.snapshot().projects.find(p=>p.workspace===child);
+  const related=[{workspace:child,projectId:childRecord.projectId,parentProjectId:origin.projectId,
+    sessionIds:childRecord.sessions.map(s=>s.sessionId)}];
+  await store.setArchived(origin.workspace,true);
+  await store.setArchived(child,true);
+  await store.forgetDeletedProject(child,assigned.projectId);
+  await store.forgetDeletedProject(origin.workspace,origin.projectId,related);
+  await store.forgetDeletedProject(origin.workspace,origin.projectId,related);
+  assert.deepEqual(store.snapshot().projects.map(p=>p.workspace),[foreign.workspace]);
+  assert.equal(store.project(foreign.workspace).sessionId,foreign.sessionId);
+});
+
 test('execution settings are captured at creation, independent of edits, selection and restart', async t => {
   const { project, store } = await fixture(t);
   let settings = { parallel_allowed: true, max_workers: 3 };

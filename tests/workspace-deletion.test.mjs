@@ -6,6 +6,7 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import { WorkspaceSessions, WorkspaceError } from '../src/workspace-session.mjs';
 import { WorkspaceDeletion } from '../src/workspace-deletion.mjs';
+import { purgeProjectStateFiles } from '../src/project-state-cleanup.mjs';
 
 async function boundChild(store,a,id) {
   const {createHash}=await import('node:crypto'),git=(cwd,...args)=>execFileSync('git',['-C',cwd,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
@@ -62,7 +63,7 @@ test('a replaced child directory stops journal recovery before parent removal',a
   assert.ok(await fs.stat(a));
 });
 
-test('characterization: recovered parent still leaves overlapping executor journal to T003',async t=>{
+test('two confirmed journals finish without orphan records when folders and hashed group are missing',async t=>{
   const {root,store,service,project}=await fixture(t);
   const parent=await project('Мастерская файлов параллельно'),neighbour=await project('Соседний');
   const child=await boundChild(store,parent,'wp-lost-child');
@@ -92,24 +93,187 @@ test('characterization: recovered parent still leaves overlapping executor journ
   }
   const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
   const errors=await restarted.recover();
-  assert.ok(errors.length<=1,'T002 can resume confirmed metadata but T003 owns overlapping journal cleanup');
-  assert.ok(errors.every(e=>['DELETE_SOURCE_UNAVAILABLE','DELETE_RECORD_CHANGED'].includes(e.code)));
+  assert.deepEqual(errors,[]);
   assert.ok(!store.project(parent),'parent metadata was recovered without original/quarantine');
-  assert.equal((await fs.readdir(service.journalDir)).length,errors.length);
-  if(errors.length)assert.ok(restarted.isPending(child));
+  assert.deepEqual(await fs.readdir(service.journalDir),[]);
   assert.equal(store.project(child,childSessionId),null);
   assert.equal(store.project(neighbour).workspace,neighbour);
   assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
   assert.ok(store.file.startsWith(root+path.sep),'the test store must stay inside the temporary fixture');
-  assert.deepEqual(await restarted.recover(),errors,'an unresolved overlapping journal remains retryable');
+  assert.deepEqual(await restarted.recover(),[],'second recovery is a no-op');
+});
 
-  // T003: both independent journals complete in either order, without stale child metadata:
-  // assert.deepEqual(await restarted.recover(), []);
-  // assert.equal(store.project(parent), null);
-  // assert.equal(store.project(child), null);
-  // assert.deepEqual(await fs.readdir(service.journalDir), []);
-  // assert.deepEqual(await restarted.recover(), []);
-  // assert.ok(store.project(neighbour));
+test('overlapping journals complete in either order with exact persisted cleanup and no duplicate writes',async t=>{
+  for(const first of ['parent','child']){
+    await t.test(first+' first',async sub=>{
+      const {root,store,service,project}=await fixture(sub);
+      const parent=await project('Parent'),neighbour=await project('Neighbour');
+      const child=await boundChild(store,parent,'owned-t003');
+      const parentId=store.project(parent).projectId,childId=store.project(child).projectId;
+      const parentSessionId=store.project(parent).sessionId,childSessionId=store.project(child).sessionId;
+      await store.setArchived(child,true);await store.setArchived(parent,true);
+      const neighbourId=store.project(neighbour).projectId,neighbourSessionId=store.project(neighbour).sessionId;
+      const deleted=[{workspace:parent,projectId:parentId,sessionIds:[parentSessionId]},
+        {workspace:child,projectId:childId,sessionIds:[childSessionId]}];
+      const settings={theme:'light',projectAutoPlan:Object.fromEntries([parent,child,neighbour].map(workspace=>[workspace,{enabled:true}])),
+        parallelExecutionBook:{parent:{workspace:parent,projectId:parentId},child:{workspace:child,projectId:childId},
+          neighbour:{workspace:neighbour,projectId:neighbourId,assignments:{active:{phase:'unknown'}}}},
+        reviewCheckpoint:{entries:[...deleted.map(entry=>({key:JSON.stringify([entry.workspace,entry.sessionIds[0]])})),
+          {key:JSON.stringify([neighbour,neighbourSessionId])}]},
+        automationCheckpoint:{entries:[...deleted.map(entry=>({sessionId:entry.sessionIds[0]})),{sessionId:neighbourSessionId}]}};
+      const dataDir=path.dirname(store.file);
+      for(const name of ['settings.json','settings.json.v1-backup'])
+        await fs.writeFile(path.join(dataDir,name),JSON.stringify(settings));
+      for(const suffix of [1,2,3,4,5])await fs.writeFile(store.file+`.v${suffix}-backup`,JSON.stringify(store.snapshot()));
+      await fs.writeFile(path.join(dataDir,'diagnostics.jsonl'),
+        [parent,child,neighbour].map(workspace=>JSON.stringify({workspace})).join('\n')+'\n');
+      await fs.mkdir(path.join(dataDir,'diagnostics'));
+      for(const name of ['chromium-events.jsonl','chromium-events.jsonl.1'])
+        await fs.writeFile(path.join(dataDir,'diagnostics',name),
+          [...deleted.map(entry=>({sessionId:entry.sessionIds[0]})),{sessionId:neighbourSessionId}]
+            .map(JSON.stringify).join('\n')+'\n');
+      service.finish=async()=>{throw Error('after confirmed journal');};
+      for(const workspace of first==='parent'?[parent,child]:[child,parent]){
+        const preview=await service.preview(workspace);
+        await assert.rejects(service.apply(preview.token,preview.name),/after confirmed journal/);
+      }
+      const files=await fs.readdir(service.journalDir);
+      const jobs=await Promise.all(files.map(name=>fs.readFile(path.join(service.journalDir,name),'utf8').then(JSON.parse)));
+      const parentJob=jobs.find(job=>job.workspace===parent),childJob=jobs.find(job=>job.workspace===child);
+      assert.deepEqual(parentJob.related.map(item=>item.workspace),[child]);
+      await fs.rm(child,{recursive:true});await fs.rmdir(path.dirname(child));await fs.rm(parent,{recursive:true});
+      const restoredStore=new WorkspaceSessions(store.file);await restoredStore.load();
+      const restarted=new WorkspaceDeletion({store:restoredStore,journalDir:service.journalDir});
+      await restarted.finish(first==='parent'?parentJob:childJob);
+      if(first==='child'){
+        const afterChild=JSON.parse(await fs.readFile(path.join(dataDir,'settings.json'),'utf8'));
+        assert.ok(afterChild.projectAutoPlan[parent],'child-first cleanup cannot remove parent with same projectId');
+        assert.deepEqual(Object.keys(afterChild.parallelExecutionBook),['parent','neighbour']);
+      }
+      assert.deepEqual(await restarted.recover(),[],'remaining journal finishes after the first one');
+      assert.deepEqual(await restarted.recover(),[],'recovery after both journals is idempotent');
+      assert.deepEqual(await fs.readdir(service.journalDir),[]);
+      assert.deepEqual(restoredStore.snapshot().projects.map(p=>p.workspace),[neighbour]);
+      assert.equal(restoredStore.project(neighbour).sessionId,neighbourSessionId);
+      for(const name of ['settings.json','settings.json.v1-backup']) {
+        const data=JSON.parse(await fs.readFile(path.join(dataDir,name),'utf8'));
+        assert.deepEqual(Object.keys(data.projectAutoPlan),[neighbour]);
+        assert.deepEqual(Object.keys(data.parallelExecutionBook),['neighbour']);
+        assert.deepEqual(data.reviewCheckpoint.entries,[{key:JSON.stringify([neighbour,neighbourSessionId])}]);
+        assert.deepEqual(data.automationCheckpoint.entries,[{sessionId:neighbourSessionId}]);
+      }
+      for(const suffix of [1,2,3,4,5]){
+        const data=JSON.parse(await fs.readFile(store.file+`.v${suffix}-backup`,'utf8'));
+        assert.deepEqual(data.projects.map(p=>p.workspace),[neighbour]);
+      }
+      assert.deepEqual(JSON.parse((await fs.readFile(path.join(dataDir,'diagnostics.jsonl'),'utf8')).trim()),{workspace:neighbour});
+      for(const name of ['chromium-events.jsonl','chromium-events.jsonl.1'])
+        assert.deepEqual(JSON.parse((await fs.readFile(path.join(dataDir,'diagnostics',name),'utf8')).trim()),{sessionId:neighbourSessionId});
+      const watched=[path.join(dataDir,'settings.json'),store.file+'.v1-backup',
+        path.join(dataDir,'diagnostics.jsonl')];
+      const stamps=await Promise.all(watched.map(file=>fs.stat(file).then(s=>s.mtimeNs??s.mtimeMs)));
+      await restarted.recover();
+      assert.deepEqual(await Promise.all(watched.map(file=>fs.stat(file).then(s=>s.mtimeNs??s.mtimeMs))),stamps,
+        'no second write to unrelated settings or backup files');
+      assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
+      assert.ok(store.file.startsWith(root+path.sep),'fixture never reads or writes real userData');
+    });
+  }
+});
+
+test('confirmed parent with missing child needs committed integrated ownership, not only database fields',async t=>{
+  for(const scenario of ['valid','assignment-missing','not-integrated','wrong-owner','changed-path']){
+    await t.test(scenario,async sub=>{
+      const {store,service,project}=await fixture(sub),parent=await project('Parent');
+      const child=await boundChild(store,parent,'wp-missing-proof');
+      await fs.rm(child,{recursive:true});
+      const saved=store.data.projects.find(p=>p.workspace===child);
+      const assignmentFile=path.join(parent,'.git/workflow-kit/assignments/wp-missing-proof.json');
+      if(scenario==='assignment-missing')await fs.rm(assignmentFile);
+      if(scenario==='not-integrated'){
+        const assignment=JSON.parse(await fs.readFile(assignmentFile,'utf8'));
+        assignment.phase='IN_PROGRESS';await fs.writeFile(assignmentFile,JSON.stringify(assignment));
+      }
+      if(scenario==='wrong-owner')saved.parentProjectId='foreign-project-id';
+      if(scenario==='changed-path')saved.sessions[0].assignmentId='foreign-worker';
+      await store.setArchived(parent,true);
+      if(scenario==='valid'){
+        const preview=await service.preview(parent);
+        assert.equal(preview.sessionCount,1);
+        await service.apply(preview.token,preview.name);
+        assert.equal(store.project(parent),null);
+        assert.equal(store.project(child),null);
+      }else{
+        await assert.rejects(service.preview(parent),{code:'DELETE_WORKTREE_CHANGED'});
+        assert.ok(store.project(child),'a non-proven child is never removed');
+      }
+    });
+  }
+});
+
+test('cascade retries after settings purge interruption preserve unrelated data',async t=>{
+  const {root,store,service,project}=await fixture(t),parent=await project('Parent'),neighbour=await project('Neighbour');
+  const child=await boundChild(store,parent,'retry-child');
+  await store.setArchived(parent,true);
+  const settingsFile=path.join(root,'app/settings.json');
+  await fs.writeFile(settingsFile,JSON.stringify({projectAutoPlan:{[parent]:{enabled:true},[child]:{enabled:true},[neighbour]:{enabled:true}}}));
+  let interrupted=false;
+  const recovering=new WorkspaceDeletion({store,journalDir:service.journalDir,
+    purgeState:async (folder,identities)=>{
+      await purgeProjectStateFiles(folder,identities);
+      if(!interrupted){interrupted=true;throw Error('after settings cleanup');}
+    }});
+  const preview=await recovering.preview(parent);
+  await assert.rejects(recovering.apply(preview.token,preview.name),/after settings cleanup/);
+  assert.equal(recovering.isPending(parent),true);
+  const restart=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual(await restart.recover(),[]);
+  assert.deepEqual(await restart.recover(),[]);
+  assert.equal(store.project(parent),null);assert.equal(store.project(child),null);
+  assert.deepEqual(Object.keys(JSON.parse(await fs.readFile(settingsFile)).projectAutoPlan),[neighbour]);
+  assert.equal(await fs.readFile(path.join(neighbour,'my-file.txt'),'utf8'),'keep until confirmed');
+});
+
+test('missing owned worktree with additional local chats keeps exact session IDs in cascade journal',async t=>{
+  const {store,service,project}=await fixture(t);
+  const parent=await project('Parent'),child=await boundChild(store,parent,'multi-chat-child');
+  const extra=await store.newChat(child);
+  const sessions=store.snapshot().projects.find(p=>p.workspace===child).sessions.map(s=>s.sessionId);
+  assert.equal(sessions.length,2);
+  assert.ok(sessions.includes(extra.sessionId));
+  await fs.rm(child,{recursive:true});
+  await store.setArchived(parent,true);
+  service.finish=async()=>{throw Error('journal captured');};
+  const preview=await service.preview(parent);
+  await assert.rejects(service.apply(preview.token,preview.name),/journal captured/);
+  const [name]=await fs.readdir(service.journalDir);
+  const journal=JSON.parse(await fs.readFile(path.join(service.journalDir,name),'utf8'));
+  assert.deepEqual(journal.related[0].sessionIds,sessions);
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual(await restarted.recover(),[]);
+  assert.equal(store.project(child),null);assert.equal(store.project(parent),null);
+});
+
+test('archive migration copy preserves a replacement identity at the old path',async t=>{
+  const {store,service,project}=await fixture(t);
+  const parent=await project('Parent'),neighbour=await project('Neighbour');
+  const oldId=store.project(parent).projectId;
+  await store.setArchived(parent,true);
+  service.finish=async()=>{throw Error('journal captured');};
+  const preview=await service.preview(parent);
+  await assert.rejects(service.apply(preview.token,preview.name),/journal captured/);
+  await fs.rm(parent,{recursive:true});
+  const archive=store.snapshot();
+  archive.projects.push({...structuredClone(archive.projects.find(p=>p.workspace===parent)),
+    projectId:'replacement-identity',sessions:[{...archive.projects.find(p=>p.workspace===parent).sessions[0],
+      sessionId:'replacement-session'}]});
+  await fs.writeFile(store.file+'.v3-backup',JSON.stringify(archive));
+  const restarted=new WorkspaceDeletion({store,journalDir:service.journalDir});
+  assert.deepEqual(await restarted.recover(),[]);
+  const kept=JSON.parse(await fs.readFile(store.file+'.v3-backup','utf8')).projects;
+  assert.ok(kept.some(p=>p.workspace===parent&&p.projectId==='replacement-identity'));
+  assert.ok(!kept.some(p=>p.workspace===parent&&p.projectId===oldId));
+  assert.ok(kept.some(p=>p.workspace===neighbour));
 });
 
 async function interruptConfirmed(service,workspace) {

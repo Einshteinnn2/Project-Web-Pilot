@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1741,
+  "plan_revision": 1743,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -162,8 +162,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T003",
@@ -194,7 +194,14 @@
         "Доказательство ownership обязательно, неинтегрированные, dirty, подменённые, чужие и неизвестно занятые worktree не каскадируются; повтор после частичного сбоя безопасен."
       ],
       "expected_commit_message": "fix: довести каскад удалений и очистку состояния исполнителей",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "src/project-state-cleanup.mjs",
+        "src/workspace-deletion.mjs",
+        "tests/project-state-cleanup.test.mjs",
+        "tests/workspace-deletion.test.mjs",
+        "tests/workspace-session.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -462,7 +469,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1741
+Revision: 1743
 
 ## Цель
 
@@ -493,8 +500,8 @@ Revision: 1741
   - Файлы: src/workspace-deletion.mjs, tests/workspace-deletion.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T001
-- [TODO] T003: Завершать каскад с отсутствующими детьми и пересекающимися журналами — Ожидает
-  - Git Commit: [PENDING] fix: довести каскад удалений и очистку состояния исполнителей
+- [DONE] T003: Завершать каскад с отсутствующими детьми и пересекающимися журналами — Завершено
+  - Git Commit: [DONE] fix: довести каскад удалений и очистку состояния исполнителей
   - Reference: archive-deletion-recovery-20261011 / T003 / implementation
   - Файлы: src/workspace-deletion.mjs, src/workspace-session.mjs, src/project-state-cleanup.mjs, tests/workspace-deletion.test.mjs, tests/workspace-session.test.mjs, tests/project-state-cleanup.test.mjs
   - Параллельность: исключительное выполнение
