@@ -1359,16 +1359,41 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     browser.sendInputEvent({ type: 'mouseUp', ...point, button: 'left', clickCount: 1 });
   };
   // 01TestAuto: saved ON -> new Chat with NONE -> busy plan creation -> idle.
+  // T001 characterization (not the desired contract): trace the *real*
+  // sidebar/preload/IPC path, including the persisted project permission.
+  // T002 must replace the second ON below with an assertion that the first
+  // ON survives NONE -> ACTIVE and sends once when the planning reply ends.
+  const autoPlanLifecycle = [];
+  const characterizeAutoPlan = async step => {
+    const selected = store.selected();
+    const persisted = JSON.parse(await fs.readFile(path.join(dataDir, 'settings.json'), 'utf8'))
+      .projectAutoPlan?.[workspace];
+    const observed = {
+      step, sessionId: selected?.sessionId ?? null, projectedScope: snapshot().selected?.scopeId ?? null,
+      publishedOrigin: snapshot().selected?.planExecution?.execution_origin_session_id ?? null,
+      persistedScope: persisted?.scopeId ?? null, awaitingPlan: persisted?.awaitingPlan === true,
+      persistedON: persisted?.enabled === true, recipient: persisted?.sessionId ?? null,
+      controllerON: autoPlan.view().enabled, sidebarON: await sidebar.executeJavaScript(
+        "document.getElementById('auto-plan-toggle').getAttribute('aria-pressed') === 'true'"),
+      sends: await countMessages(),
+    };
+    autoPlanLifecycle.push(observed);
+    await fs.writeFile(path.join(dataDir, 'autoplan-lifecycle-characterization.json'),
+      JSON.stringify(autoPlanLifecycle, null, 2));
+    return observed;
+  };
   const prePlanChat = store.snapshot().projects.find(p => p.workspace === workspace).sessions
     .find(session => !session.archivedAt && session.chatUrl);
   await sidebar.executeJavaScript('window.webPilot.setAutoPlan(true)');
   assert.equal((await savedAutoState()).autoPlanEnabled, true, 'explicit pre-plan authorization persists');
+  await characterizeAutoPlan('sidebar-ON-before-plan');
   await sidebar.executeJavaScript(`window.webPilot.newSession(${JSON.stringify(workspace)}, "chat")`);
   await waitFor(() => store.selected()?.sessionId !== prePlanChat.sessionId
     && snapshot().context.phase === 'delivered' && !snapshot().selected?.scopeId,
     '01TestAuto new Chat starts with NONE and saved ON', snapshot);
   const autoScopeOwner = store.selected();
   assert.equal(await countMessages(), 1, 'only normal recovery; no AutoPlan startup instruction');
+  await characterizeAutoPlan('new-chat-Recovery-NONE');
   assert.equal(autoPlan.view().enabled, false);
   await beginAnswer(); await noExtraSend(1);
   const legacyChats = [prePlanChat, autoScopeOwner]
@@ -1397,10 +1422,25 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   const scopeOwnerId = new URL(scopeOwner.chatUrl).pathname.split('/').at(-1);
   await waitFor(() => fixtureConversationTitles.get(scopeOwnerId) === currentScopeTitle,
     'scope owner title is synchronized to native ChatGPT fixture', snapshot);
+  const afterPublication = await characterizeAutoPlan('Kit-published-ACTIVE-before-second-ON');
+  assert.equal(afterPublication.controllerON, false,
+    'T001 CURRENT: first ON does not arm the new session; T002 must require controllerON=true');
+  assert.equal(afterPublication.sends, 1,
+    'T001 CURRENT: scope publication alone does not send; T002 must continue on first assistant idle');
   assert.equal(autoPlan.view().enabled, false);
-  await sidebar.executeJavaScript('window.webPilot.setAutoPlan(true)');
-  assert.equal(autoPlan.view().enabled, true); assert.equal(await countMessages(), 1);
   await endAnswer('Создан текущий план, обычный отчёт без специальной итоговой строки.');
+  await new Promise(resolve => setTimeout(resolve, 800));
+  const idleAfterFirstON = await characterizeAutoPlan('planning-reply-idle-with-only-first-ON');
+  assert.equal(idleAfterFirstON.sends, 1,
+    'T001 CURRENT: even after assistant idle the first ON has not sent; T002 must expect 2');
+  assert.equal(idleAfterFirstON.persistedON, true, 'the user permission is not actually OFF');
+  assert.equal(idleAfterFirstON.sidebarON, true, 'sidebar ON currently masks a disabled per-chat controller');
+  assert.equal(idleAfterFirstON.persistedScope, 'fixture-current-plan', 'a delayed monitor binds the plan');
+  assert.notEqual(idleAfterFirstON.recipient, scopeOwner.sessionId,
+    'T001 CURRENT: binding retains the pre-plan chat rather than waking the planning chat');
+  assert.equal(idleAfterFirstON.controllerON, false, 'the new chat never became permitted after publication');
+  await sidebar.executeJavaScript('window.webPilot.setAutoPlan(true)');
+  await characterizeAutoPlan('workaround-second-ON');
   await expectContinue(1, '01TestAuto NONE -> ACTIVE -> idle sends exactly one Continue');
   await noExtraSend(2);
   const loadsBeforeProgress = packetLoads;
@@ -1472,6 +1512,29 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     'manual rename updates local and native titles together', snapshot);
   assert.equal(store.selected().titleSource, 'manual');
 
+  // T001 recovery characterization: partial ACTIVE plan, OFF, newly delivered
+  // Work Recovery, assistant already idle, ONE sidebar click. The assertion
+  // for T003 is exactly one Send addressed to this new conversation (and none
+  // to the previous chat); do not silently fix it with another OFF -> ON.
+  const recoveryBefore = await countMessages();
+  await beginAnswer();
+  await endAnswer('Recovery прочитан. Готов продолжать существующий план.');
+  await waitFor(() => !pageState.current?.state.busy && pageState.current?.state.lastMessageRole === 'assistant',
+    'recovered Work has an idle assistant answer', snapshot);
+  await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').click()");
+  await waitFor(() => savedAutoState().then(state => state.autoPlanEnabled),
+    'one explicit ON after recovered Work answer', snapshot);
+  const recoveredOnce = await characterizeAutoPlan('recovered-Work-after-one-ON');
+  await new Promise(resolve => setTimeout(resolve, 750));
+  const recoveredSends = await countMessages() - recoveryBefore;
+  await characterizeAutoPlan('recovered-Work-settled-without-second-click');
+  assert.equal(recoveredSends, 1,
+    'T001 CONTROL: verified ACTIVE + already idle Recovery does send once after one ON');
+  assert.equal(recoveredOnce.recipient, currentWork.sessionId,
+    'the recovered Work, not the previous main chat, receives the authorization');
+  assert.equal(recoveredOnce.persistedON, true, 'recovery ON is persisted for the selected project');
+  await sidebar.executeJavaScript('window.webPilot.setAutoPlan(false)');
+
   for (const directory of ['.harness/plans/by-id', '.harness/plans/by-session']) {
     const entries = await fs.readdir(path.join(workspace, directory)).catch(error => error.code === 'ENOENT' ? [] : Promise.reject(error));
     assert.equal(entries.some(name => name.endsWith('.md')), false, directory + ' is not runtime plan storage');
@@ -1487,6 +1550,7 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
       'partial plan ready in ' + target.experience, snapshot);
     await waitFor(() => sidebar.executeJavaScript("!document.getElementById('auto-plan-toggle').disabled"), 'auto-plan toggle ready', snapshot);
     const before = await countMessages();
+    const continuationsBefore = autoPlan.view().continuations;
     await beginAnswer();
     await sidebar.executeJavaScript("document.getElementById('auto-plan-toggle').click()");
     await waitFor(() => autoPlan.view().phase === 'running', 'ON adopts the busy answer', snapshot);
@@ -1494,8 +1558,9 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
     await endAnswer();
     await expectContinue(before, 'ordinary answer continues once in ' + target.experience);
     assert.deepEqual(autoPlan.run.completedAtStart, ['T001']);
-    assert.equal(autoPlan.view().continuations, 1);
-    await waitFor(() => sidebar.executeJavaScript("document.getElementById('auto-plan-message').textContent.includes('Продолжай» №1')"),
+    assert.equal(autoPlan.view().continuations, continuationsBefore + 1);
+    await waitFor(() => sidebar.executeJavaScript("document.getElementById('auto-plan-message').textContent.includes(" +
+      JSON.stringify('Продолжай» №' + (continuationsBefore + 1)) + ")"),
       'confirmed counter visible in sidebar', snapshot);
     await noExtraSend(before + 1);
     if (target.experience === 'chat') {

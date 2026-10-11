@@ -147,6 +147,72 @@ test('A04/A05: a new archived-plan epoch may restart revision numbers without re
  assert.equal(restored.state('/a').scopeId,'fresh');
 });
 
+test('T001 boundary: one pre-plan ON binds to the published origin despite stale NONE and another project',()=>{
+ const sessions=new Set(['preplan','published']);
+ const identities=new Map([['/fixture','project-a'],['/neighbor','project-b']]);
+ const auth=new ProjectAutoPlan({identity:workspace=>identities.get(workspace),ownsSession:(_workspace,id)=>sessions.has(id)});
+ auth.set('/fixture',null,true,'preplan');
+ auth.set('/neighbor','neighbor-scope',true,'preplan');
+ auth.sync('/fixture',null,{confirmed:false});
+ auth.sync('/fixture','unpublished',{confirmed:false,planRevision:10,originSessionId:'published'});
+ assert.equal(auth.state('/fixture').awaitingPlan,true);
+ const afterRestart=new ProjectAutoPlan({saved:auth.snapshot(),identity:workspace=>identities.get(workspace),
+   ownsSession:(_workspace,id)=>sessions.has(id)});
+ afterRestart.sync('/fixture','published-scope',{confirmed:true,planRevision:11,originSessionId:'published'});
+ assert.equal(afterRestart.state('/fixture').sessionId,'published');
+ assert.equal(afterRestart.enabled('/fixture','published-scope'),true);
+ afterRestart.sync('/fixture',null,{confirmed:false});
+ assert.equal(afterRestart.enabled('/fixture','published-scope'),true);
+ assert.equal(afterRestart.enabled('/neighbor','neighbor-scope'),true);
+ // This authorization-unit path already works. The existing Electron smoke
+ // needed a *second* ON after publication: T002 must repair that wiring.
+});
+
+test('T001 boundary: OFF and recovered-session ON transfer one project permission but not its ledgers',()=>{
+ const auth=new ProjectAutoPlan({identity:()=> 'same-project',ownsSession:(_w,id)=>['previous','recovered'].includes(id)});
+ auth.set('/fixture','scope',true,'previous');
+ const sent={version:3,entries:[{key:JSON.stringify(['/fixture','previous','scope','https://chatgpt.com/c/previous']),
+   turnId:'previous-answer',status:'sent',generation:1}],cycles:[]};
+ auth.saveCheckpoint('/fixture','scope','previous',{autoPlanCheckpoint:sent,
+   automationCheckpoint:{version:2,entries:[{status:'sending'}]}});
+ auth.set('/fixture','scope',false,'previous');
+ assert.equal(auth.state('/fixture').offReason,'manual');
+ auth.set('/fixture','scope',true,'recovered');
+ assert.equal(auth.state('/fixture').sessionId,'recovered');
+ assert.equal(auth.enabled('/fixture','scope'),true);
+ assert.deepEqual(auth.checkpoint('/fixture','scope','recovered'),{});
+ assert.deepEqual(auth.checkpoint('/fixture','scope','previous').autoPlanCheckpoint,sent);
+ const restarted=new ProjectAutoPlan({saved:auth.snapshot(),identity:()=> 'same-project',ownsSession:()=>true});
+ assert.equal(restarted.state('/fixture').sessionId,'recovered');
+ assert.deepEqual(restarted.checkpoint('/fixture','scope','previous').autoPlanCheckpoint,sent);
+ // T003 must prove the click also wakes the new live runtime via sidebar IPC.
+});
+
+test('T001 CURRENT race: recovered ON during an unconfirmed plan read strands the previous ACTIVE scope',()=>{
+ // Reproduce the exact authorization calls made by pilot:auto-plan when a
+ // transient read returns unconfirmed: sync(null) followed by set(null, ON).
+ // This is a characterization, NOT a desired assertion. T003 must keep the
+ // known unfinished scope and transfer the recipient to the recovered chat.
+ const auth=new ProjectAutoPlan({identity:()=> 'project',ownsSession:()=>true});
+ auth.set('/fixture','partial',true,'previous');
+ auth.sync('/fixture','partial',{confirmed:true,planRevision:42,originSessionId:'previous'});
+ auth.set('/fixture','partial',false,'previous');
+ auth.saveCheckpoint('/fixture','partial','previous',{autoPlanCheckpoint:{version:3,entries:[{
+   key:JSON.stringify(['/fixture','previous','partial','https://chatgpt.com/c/previous']),
+   turnId:'already-sent',status:'sent'}]}});
+ auth.sync('/fixture',null,{confirmed:false});
+ auth.set('/fixture',null,true,'recovered');
+ assert.deepEqual({scope:auth.state('/fixture').scopeId,awaiting:auth.state('/fixture').awaitingPlan,
+   recipient:auth.state('/fixture').sessionId},
+   {scope:'',awaiting:true,recipient:'recovered'},'T001 CURRENT: uncertain read turns recovered ON into pre-plan wait');
+ auth.sync('/fixture','partial',{confirmed:true,planRevision:43,originSessionId:'previous'});
+ assert.equal(auth.state('/fixture').scopeId,'',
+   'T001 CURRENT: previousScopeId blocks rebinding to same partial plan; T003 must retain ACTIVE');
+ assert.equal(auth.enabled('/fixture','partial'),false,'a recovered idle chat cannot send while stranded');
+ assert.equal(auth.checkpoint('/fixture','partial','previous').autoPlanCheckpoint,undefined,
+   'T001 CURRENT: changing scope loses the old scoped checkpoint lookup');
+});
+
 test('A01/A02/A04/A06: two main monitors in one project send only from plan origin despite stale/error, then OFF',async t=>{
  const {configureProjectAutoPlan}=await import('../src/project-session-auto-plan.mjs');
  const fs=await import('node:fs/promises'),os=await import('node:os'),path=await import('node:path');

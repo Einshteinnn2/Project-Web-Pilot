@@ -80,6 +80,26 @@ test('existing idle replies with and without native IDs are suitable pauses', as
     assert.equal(f.sends.length, 2);
   }
 });
+test('T001 controller boundary: one ON on a recovered idle conversation sends once, old sent/unknown pauses remain guarded',async()=>{
+ const f=fixture();
+ await f.flow.start();
+ assert.equal(f.sends.length,1,'previous main sent exactly once');
+ const previous=f.flow.checkpointState();
+  previous.entries.push({...previous.entries[0],turnId:'previous-uncertain',status:'sending'});
+ f.flow.disable({manual:true});
+ f.changeSelection();
+ f.observe({url:f.selected().chatUrl,turnId:'recovery-idle',lastMessageRole:'assistant'});
+ assert.equal(f.flow.view().enabled,false);
+ f.flow.restore(false,previous);
+ await f.flow.start(); // one explicit permission; no second OFF -> ON
+ await f.drain();
+ assert.equal(f.sends.length,2,'recovered main is immediately eligible at its already idle pause');
+  assert.equal(f.flow.checkpointState().entries.length,3,'old sent and UNKNOWN plus recovered sent remain independent');
+ await f.flow.planChanged();await f.drain();
+ assert.equal(f.sends.length,2,'repeat plan/page events do not dispatch a duplicate');
+ f.flow.dispose();f.flow.restore(true,f.flow.checkpointState());
+ await f.flow.recover();assert.equal(f.sends.length,2,'restart does not repeat an acknowledged Send');
+});
 test('NONE becomes ACTIVE through PlanMonitor while an ordinary reply is busy', async () => {
   const f = fixture({ busy: true, scopeId: null, turnId: '' });
   const monitor = new PlanMonitor({

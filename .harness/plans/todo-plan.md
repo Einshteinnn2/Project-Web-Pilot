@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1761,
+  "plan_revision": 1763,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -36,7 +36,8 @@
       "package.json",
       "package-lock.json",
       ".harness/workflow.json",
-      "release-manifest.json"
+      "release-manifest.json",
+      "tests/parallel-execution-recovery.test.mjs"
     ],
     "documentation_paths": [
       "docs/planning/autoplan-lifecycle-recovery-spec.md",
@@ -80,8 +81,8 @@
   },
   "tasks": [
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "T001",
@@ -91,7 +92,8 @@
       "functional_paths": [
         "tests/project-auto-plan.test.mjs",
         "tests/auto-plan.test.mjs",
-        "tests/electron-smoke.mjs"
+        "tests/electron-smoke.mjs",
+        "tests/parallel-execution-recovery.test.mjs"
       ],
       "documentation_paths": [],
       "verification_ids": [
@@ -108,7 +110,13 @@
         "Характеризующие assertions текущего поведения зелёные; требуемые новые assertions явно обозначены для следующих задач; защищены отдельные проекты, idempotency и сохранённые checkpoints."
       ],
       "expected_commit_message": "test: characterize AutoPlan planning and recovery gaps",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "tests/auto-plan.test.mjs",
+        "tests/electron-smoke.mjs",
+        "tests/parallel-execution-recovery.test.mjs",
+        "tests/project-auto-plan.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -389,7 +397,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1761
+Revision: 1763
 
 ## Цель
 
@@ -408,10 +416,10 @@ Revision: 1761
 Выполнение: sequential; разрешено: true; лимит: 4
 Причина: Общие переходы ProjectAutoPlan, получателя Send, PlanMonitor и main IPC; параллельные исправления одной машины состояний мешают воспроизвести гонки и безопасно интегрировать изменения.
 
-- [TODO] T001: Зафиксировать оба отказа на изолированных сквозных fixtures — Ожидает
-  - Git Commit: [PENDING] test: characterize AutoPlan planning and recovery gaps
+- [DONE] T001: Зафиксировать оба отказа на изолированных сквозных fixtures — Завершено
+  - Git Commit: [DONE] test: characterize AutoPlan planning and recovery gaps
   - Reference: autoplan-lifecycle-recovery-20261011 / T001 / implementation
-  - Файлы: tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, tests/electron-smoke.mjs
+  - Файлы: tests/project-auto-plan.test.mjs, tests/auto-plan.test.mjs, tests/electron-smoke.mjs, tests/parallel-execution-recovery.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: нет
 - [TODO] T002: Сохранить ON при создании сессии и публикации первого плана — Ожидает

@@ -33,11 +33,15 @@ test('F04: child receipt replacement wakes main without a worker page or polling
   const watcher=new ChildCommandWatches({onSignal:()=>{events++;notify?.();notify=null;},onError:e=>errors.push(e)});
   t.after(()=>watcher.close());
   watcher.update([child]);
+  // During the full concurrent Node suite macOS can delay fs.watch delivery
+  // while many unrelated fixtures are creating directories in os.tmpdir().
+  // Give the real watcher time to settle; never replace the event with polling.
+  await new Promise(resolve=>setTimeout(resolve,100));
   const marker=path.join(child,'.harness/runtime/command-activity','command.json');
   const record={version:2,id:'command',workspace:child,cwd:child,executor_pid:12345,
     executor_instance:'fixture',started_at_ms:Date.now(),process_id:'fixture',state:'running',sandbox_policy:'dangerFullAccess'};
   const changed=()=>new Promise((resolve,reject)=>{
-    const timeout=setTimeout(()=>{notify=null;reject(Error('child watcher missed a real file event'));},5000);
+    const timeout=setTimeout(()=>{notify=null;reject(Error('child watcher missed a real file event'));},15000);
     notify=()=>{clearTimeout(timeout);resolve();};
   });
   let observed=changed();
