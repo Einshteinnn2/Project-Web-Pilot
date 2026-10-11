@@ -73,6 +73,43 @@ test('explicit ON before a plan survives restart and binds once to the first sco
  b.sync('/a','first',{complete:true,confirmed:true});assert.equal(b.enabled('/a','first'),false);
  b.sync('/a','second',{confirmed:true,planRevision:2});assert.equal(b.enabled('/a','second'),false);
 });
+
+// Characterization before rotation: creating/selecting a second Chat does not
+// change the permission recipient. Today an explicit OFF -> ON is necessary to
+// move authority; T006 will add the guarded new-Chat+Recovery path without
+// giving ordinary selection the same capability.
+test('rotation baseline: new Chat alone does not transfer recipient; explicit ON does, without losing the old ledger',()=>{
+ const sessions=new Set(['chat-old']);
+ const identity=()=> 'same-project';
+ const ownsSession=(_workspace,id)=>sessions.has(id);
+ const auth=new ProjectAutoPlan({identity,ownsSession});
+ auth.set('/fixture',null,true,'chat-old');
+ auth.sync('/fixture','scope',{confirmed:true,planRevision:1,originSessionId:'chat-old',executionStrategy:'sequential'});
+ assert.equal(auth.enabled('/fixture','scope'),true,'pre-plan ON attaches to the published plan');
+ assert.equal(auth.state('/fixture').sessionId,'chat-old');
+ auth.saveCheckpoint('/fixture','scope','chat-old',{autoPlanCheckpoint:{entries:[{status:'sent',turnId:'a'}]}});
+
+ sessions.add('chat-new'); // WorkspaceSessions.newSession does not call ProjectAutoPlan.set.
+ auth.sync('/fixture','scope',{confirmed:true,planRevision:2,originSessionId:'chat-old'});
+ assert.equal(auth.state('/fixture').sessionId,'chat-old','a new/selected Chat does not steal the current recipient');
+ assert.deepEqual(auth.checkpoint('/fixture','scope','chat-new'),{},'new chat starts with a fresh ledger');
+
+ auth.set('/fixture','scope',false,'chat-old');
+ assert.equal(auth.state('/fixture').offReason,'manual');
+ auth.set('/fixture','scope',true,'chat-new');
+ assert.equal(auth.state('/fixture').sessionId,'chat-new');
+ assert.equal(auth.state('/fixture').offReason,null);
+ const resumed=new ProjectAutoPlan({saved:auth.snapshot(),identity,ownsSession});
+ assert.equal(resumed.enabled('/fixture','scope'),true);
+ assert.equal(resumed.state('/fixture').sessionId,'chat-new');
+ assert.deepEqual(resumed.checkpoint('/fixture','scope','chat-new'),{});
+ assert.equal(resumed.checkpoint('/fixture','scope','chat-old').autoPlanCheckpoint.entries[0].status,'sent');
+});
+
+test.todo('rotation: manually created new Chat under ON becomes the sole recipient after confirmed Recovery without toggling');
+test.todo('rotation: OFF keeps manual Chat creation inert and plain selection never steals permission');
+test.todo('rotation: background project creates its replacement Chat without changing the visible project');
+
 test('OFF cancels pre-plan authorization and a read failure cannot carry old scope ON',()=>{
  const a=new ProjectAutoPlan();a.set('/a',null,true,'main');a.set('/a',null,false,'main');
  a.sync('/a','first',{confirmed:true,planRevision:1});assert.equal(a.enabled('/a','first'),false);

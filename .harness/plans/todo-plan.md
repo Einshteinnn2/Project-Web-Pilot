@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1784,
+  "plan_revision": 1786,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -80,8 +80,8 @@
   },
   "tasks": [
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T001",
@@ -106,7 +106,12 @@
         "Только зелёные характеризующие тесты текущих AutoPlan и Recovery; будущие ожидания ротации описаны как todo/skip и не маскируют регрессию."
       ],
       "expected_commit_message": "feat: Зафиксировать исходный жизненный цикл Chat и матрицу ротации",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "docs/planning/chat-session-rotation-spec.md",
+        "tests/auto-plan.test.mjs",
+        "tests/project-auto-plan.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -525,7 +530,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1784
+Revision: 1786
 
 ## Цель
 
@@ -542,8 +547,8 @@ Revision: 1784
 Выполнение: sequential; разрешено: true; лимит: 4
 Причина: AutoPlan authority, Kit DONE, SessionRuntime и durable handoff совместно меняют один жизненный цикл и общие файлы. Один writer предотвращает двойной Send/Chat; параллельность разрешена снимком, но нецелесообразна.
 
-- [TODO] T001: Зафиксировать исходный жизненный цикл Chat и матрицу ротации — Ожидает
-  - Git Commit: [PENDING] feat: Зафиксировать исходный жизненный цикл Chat и матрицу ротации
+- [DONE] T001: Зафиксировать исходный жизненный цикл Chat и матрицу ротации — Завершено
+  - Git Commit: [DONE] feat: Зафиксировать исходный жизненный цикл Chat и матрицу ротации
   - Reference: chat-session-rotation-20261011 / T001 / implementation
   - Файлы: tests/auto-plan.test.mjs, tests/project-auto-plan.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

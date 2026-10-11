@@ -121,6 +121,47 @@ test('NONE becomes ACTIVE through PlanMonitor while an ordinary reply is busy', 
   assert.deepEqual(f.sends, ['Продолжай', 'Продолжай']);
   monitor.close();
 });
+
+// Chat session rotation is not implemented yet. This baseline deliberately
+// characterizes the existing AutoPlan sender in isolation: it has no task
+// quota and will send at every eligible assistant pause. The future rotation
+// gate belongs in the project/session orchestration, before this Send.
+test('rotation baseline: four sequential DONE projections still continue in the same Chat today', async () => {
+  const f = fixture({ busy: true });
+  const tasks = Array.from({ length: 6 }, (_, index) => ({
+    id: `T${String(index + 1).padStart(3, '0')}`, status: index === 0 ? 'current' : 'pending',
+  }));
+  f.plan.planView.tasks = tasks;
+  f.plan.nextTask = { id: 'T001', title: 'Первая задача' };
+  await f.flow.start();
+  assert.deepEqual(f.sends, [], 'pre-publication/busy reply is not interrupted');
+  await f.finish();
+  assert.match(f.sends[0], /Задача: T001/);
+
+  for (let index = 0; index < 4; index++) {
+    f.observe({ busy: true });
+    tasks[index].status = 'done';
+    tasks[index + 1].status = 'current';
+    f.plan.nextTask = { id: tasks[index + 1].id, title: 'Следующая задача' };
+    f.plan.planRevision++;
+    await f.flow.planChanged(); await f.drain();
+    assert.equal(f.sends.length, index + 1, 'the confirmed-looking projection cannot interrupt busy');
+    await f.finish();
+    assert.equal(f.sends.length, index + 2, 'current sender has no rotation threshold');
+    assert.match(f.sends.at(-1), new RegExp(`Задача: ${tasks[index + 1].id}`));
+    await f.flow.planChanged(); await f.drain();
+    assert.equal(f.sends.length, index + 2, 'same pause cannot send a second Continue');
+  }
+  assert.equal(tasks.filter(task => task.status === 'done').length, 4);
+  assert.equal(f.sends.length, 5, 'current Chat would continue T005 after its fourth DONE');
+  f.flow.dispose();
+});
+
+test.todo('rotation N=1: after the first Git-proven DONE and assistant idle, new Chat receives one Recovery instead of old Continue');
+test.todo('rotation N=4: after four Git-proven DONE, old Chat is blocked and the new Chat starts at zero');
+test.todo('rotation: DOCS and delivery count, but the final DONE completes without another Chat');
+test.todo('rotation: restart or an UNKNOWN recovery/send cannot create a duplicate Chat or repeat a Send');
+
 test('an enabled idle client wakes when its first plan appears', async () => {
   const f = fixture({ scopeId: null, turnId: '' }); f.observe({ lastMessageRole: 'assistant' }); await f.flow.start();
   assert.equal(f.flow.view().reason, 'PLAN_UNAVAILABLE');
