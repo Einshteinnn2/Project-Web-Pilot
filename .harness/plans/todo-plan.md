@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1760,
+  "plan_revision": 1761,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -66,21 +66,6 @@
       },
       {
         "path": "docs/modules/auto-plan-send.md",
-        "required": true,
-        "revision": "WORKTREE"
-      },
-      {
-        "path": "docs/modules/workspace-sessions.md",
-        "required": true,
-        "revision": "WORKTREE"
-      },
-      {
-        "path": "docs/modules/parallel-execution.md",
-        "required": true,
-        "revision": "WORKTREE"
-      },
-      {
-        "path": "docs/modules/release.md",
         "required": true,
         "revision": "WORKTREE"
       },
@@ -404,7 +389,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1760
+Revision: 1761
 
 ## Цель
 
@@ -483,9 +468,6 @@ Revision: 1760
 - docs/planning/autoplan-lifecycle-recovery-spec.md
 - docs/modules/auto-plan.md
 - docs/modules/auto-plan-send.md
-- docs/modules/workspace-sessions.md
-- docs/modules/parallel-execution.md
-- docs/modules/release.md
 - docs/architecture/OVERVIEW.md
 
 Служебные состояния меняются только командами workflow. Приёмка не архивирует scope.
