@@ -79,7 +79,7 @@
 
 ### События и reconcile
 
-- Будят пересмотр: переключатель; наблюдение страницы (`observe`, включая `reset` документа); PlanMonitor `semanticChanged|recovered` → `planChanged()`; `publish()` → `selectionChanged()` и `availabilityChanged()` (только при смене `available()`).
+- Будят пересмотр: переключатель через `pilot:auto-plan` (после сохранения ON при уже готовом idle вызывает `planChanged()`), наблюдение страницы (`observe`, включая `reset` документа, busy→idle, загрузку истории и изменение черновика); PlanMonitor `semanticChanged|recovered` → `planChanged()`; `publish()` → `selectionChanged()` и `availabilityChanged()` (только при смене `available()`). Переход NONE→ACTIVE и восстановленный main не требуют нового нажатия.
 - Один сериализованный проход: `reconcile()` ставит `rerunRequested`; во время прохода возвращается его promise, затем выполняется ещё один. Выключенный или закрытый AutoPlan ничего не делает.
 - Во время `busy` план не читается и Git не вызывается. После busy→idle (или смены `turnId` в idle) при ON ставится settle-таймер 500 мс; пока он ждёт, проход завершается без действий. Других таймеров, кроме watchdog 180 000 мс, нет; Git читается только на idle-проходе и в `onBeforeSend`.
 
@@ -87,7 +87,7 @@
 
 - Draft не трогается: Send ждёт (`DRAFT_PRESENT`); очистка draft будит ту же паузу.
 - Ручная отправка использует паузу: доверенный click/Enter с текстом в поле, затем новое user-сообщение с тем же текстом → `manualSendRevision`; AutoPlan ждёт новый ответ (`USER_MESSAGE_PENDING`), в том числе после reload (последнее сообщение — user) и если busy ещё не появился.
-- Ручной Stop — обычная idle-пауза: режим остаётся ON, следующее «Продолжай» продолжает работу. Остановить автоматику можно только переключателем.
+- Ручной Stop не переводит кнопку в OFF, но отменяет автоматическое продолжение остановленного ответа; после нового пользовательского сообщения и следующего ответа возможно продолжение. Для прекращения новых автоматических отправок пользователь явно выключает AutoPlan.
 - Диалоги разрешений ChatGPT не автоматизируются.
 
 ### Watchdog
@@ -99,7 +99,7 @@
 
 ### Состояние в панели и диагностика
 
-- `view()`: `{phase, message, active, reason, enabled, warning, continuations}`; фазы `off|waiting|checking|sending|running|paused|complete`. Панель: `Автоматически отправлено «Продолжай» №N.` + сообщение фазы; `data-reason` — код.
+- `view()`: `{phase, message, active, reason, enabled, warning, continuations}`; фазы `off|waiting|checking|sending|running|paused|complete`. Панель: `Автоматически отправлено «Продолжай» №N.` + сообщение фазы; `data-reason` — код. Во время технической фазы WAIT разрешение остаётся ON: `#auto-plan-toggle[aria-pressed=true]` и `#auto-plan-message[data-reason]` с непустым сообщением; busy = `running` без выдуманного кода ожидания.
 - Тексты описывают состояние клиента.
 - Коды: `MANUAL_OFF` (только явное действие пользователя), `AUTHORIZATION_OFF` (программный disable при отсутствии разрешения), `PAGE_NOT_READY`, `CONNECTION_ERROR`, `DRAFT_PRESENT`, `HISTORY_NOT_READY`, `USER_MESSAGE_PENDING`, `PLAN_UNAVAILABLE`, `PLAN_READ_ERROR`, `PLAN_CHANGED_OR_TRANSACTION`, `LEGACY_PAUSE_UNKNOWN`, `PAUSE_CONSUMED`, `SEND_UNKNOWN`, `SEND_NOT_SENT`, `SEND_ERROR`, `SEND_CHECKPOINT_ERROR`, `STALL_WARNING`, `PLAN_COMPLETED`.
 - Диагностика — `chromium-events.jsonl`, источник `auto-plan`: `state` (фаза, код), `pause` (opaque ID, источник, поколение), `send` (вид, счётчик), `progress-timeout`/`progress-resumed`. Без текста разговора и UI, URL, секретов ([chromium-diagnostics.md](chromium-diagnostics.md)).

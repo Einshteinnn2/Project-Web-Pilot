@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1772,
+  "plan_revision": 1774,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "autoplan-lifecycle-recovery-20261011",
@@ -48,7 +48,9 @@
       "docs/modules/parallel-execution.md",
       "docs/modules/release.md",
       "docs/architecture/OVERVIEW.md",
-      "README.md"
+      "README.md",
+      "docs/modules/parallel-execution-acceptance.md",
+      "docs/planning/archive-deletion-recovery-spec.md"
     ]
   },
   "baseline_commit": "a1cd02424932d4666fd43cbcd6a61a7f2d5e2a31",
@@ -281,8 +283,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "autoplan-lifecycle-recovery-20261011",
         "task_id": "DOCS",
@@ -301,14 +303,29 @@
       ],
       "functional_paths": [],
       "documentation_paths": [
-        "docs/architecture/OVERVIEW.md"
+        "docs/architecture/OVERVIEW.md",
+        "README.md",
+        "docs/modules/auto-plan.md",
+        "docs/modules/auto-plan-send.md",
+        "docs/modules/release.md",
+        "docs/modules/parallel-execution-acceptance.md",
+        "docs/planning/archive-deletion-recovery-spec.md"
       ],
       "acceptance_criteria": [
         "Документы описывают текущий результат, существенное из выпущенных рабочих спецификаций перенесено в контракты модулей; история остаётся в Git."
       ],
       "verification_ids": [],
       "expected_commit_message": "docs: актуализировать документацию проекта",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "README.md",
+        "docs/architecture/OVERVIEW.md",
+        "docs/modules/auto-plan.md",
+        "docs/modules/auto-plan-send.md",
+        "docs/modules/release.md",
+        "docs/modules/parallel-execution-acceptance.md",
+        "docs/planning/archive-deletion-recovery-spec.md"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -424,7 +441,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: autoplan-lifecycle-recovery-20261011
 Current Task: нет
-Revision: 1772
+Revision: 1774
 
 ## Цель
 
@@ -473,10 +490,10 @@ Revision: 1772
   - Файлы: package.json, package-lock.json, .harness/workflow.json
   - Параллельность: исключительное выполнение
   - Зависимости: T004
-- [TODO] DOCS: Актуализация всех документов проекта — Ожидает
-  - Git Commit: [PENDING] docs: актуализировать документацию проекта
+- [DONE] DOCS: Актуализация всех документов проекта — Завершено
+  - Git Commit: [DONE] docs: актуализировать документацию проекта
   - Reference: autoplan-lifecycle-recovery-20261011 / DOCS / implementation
-  - Файлы: docs/architecture/OVERVIEW.md
+  - Файлы: docs/architecture/OVERVIEW.md, README.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/release.md, docs/modules/parallel-execution-acceptance.md, docs/planning/archive-deletion-recovery-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T001, T002, T003, T004, T005
 - [TODO] T006: Собрать единственный парный выпуск 0.6.113 — Ожидает
