@@ -203,7 +203,7 @@ async function verifyUninterruptedRequest(dataDir) {
   }
 }
 
-export async function run({ app, window, sidebar, store, selectWorkspace, workspaceSetup, snapshot, assertLocalSender, permissionAllowed, dataDir, chromiumDiagnosticsFile, navigate, getArchiveWindow, getColorWindow, eventBaseline = false, runtimeMetrics = null, autoPlan, getLive, liveSessions }) {
+export async function run({ app, window, sidebar, store, selectWorkspace, workspaceSetup, snapshot, assertLocalSender, permissionAllowed, dataDir, chromiumDiagnosticsFile, navigate, getArchiveWindow, getColorWindow, eventBaseline = false, runtimeMetrics = null, autoPlan, getLive, liveSessions, deletion, execution }) {
   // Test actions follow the visible page; production controllers retain their own page.
   const currentObject=key=>new Proxy({}, {
     get:(_target,property)=>{const value=getLive()[key][property];return typeof value==='function'?value.bind(getLive()[key]):value;},
@@ -1780,11 +1780,145 @@ export async function run({ app, window, sidebar, store, selectWorkspace, worksp
   assert.equal(packetLoads, loadsBeforeManualReopen);
   const parallelFixture=await import('./parallel-execution-smoke-fixture.cjs');
   await parallelFixture.default.run({sidebar,store,workspaceSetup,snapshot,selectWorkspace,liveSessions,dataDir,waitFor,getArchiveWindow});
+  await verifyDeletionRecoveryUi({sidebar,browser,store,snapshot,dataDir,deletion,execution,dialog,makeAux,getArchiveWindow,waitFor,neighbour:auxE});
   const result = { ordinaryManualSend: true, manualRecoverySend: true, boundedReconnect: true, largeAutomaticSend: true, fullVersionBadge: true, septemberDOM: true, reverseScroll: true, directFirstChat: true, directFirstWork: true, startupLoginEntrypoint: true, uninterruptedFirstRequest: true, firstRequestNetworkTrace: true, duplicateStartupBlocked: true, earlyFirstLoadDiagnostics: true, guidedFirstRun: true, firstRunScreenshots: [path.join(dataDir, "startup-account.png"), path.join(dataDir, "startup-login.png"), path.join(dataDir, "startup-components.png")], fastSavedNavigation: true, lastNavigationWins: true, readinessBeforeOrAfterLoad: true, backgroundFailureRetry: true, liveChatColors: true, composerBackground: true, streamingAssistantColor: true, chatColorsPersistence: true, chatColorsReset: true, colorScreenshots, projectDoctor: true, doctorBackup: true, doctorOpen: true, doctorRefresh: true, doctorNewSession: true, doctorScreenshots, newestSessionFirst: true, projectSelectsNewest: true, threeSessionViewport: true, sessionScrollPreserved: true, visibleSessionScrollbar: true, nativeProjectsDisclosure: true, treePopover: true, treeScreenshots, singleActivePlanSessions: true, checkoutPlanAcrossOldChats: true, checkoutRecoveryShared: true, noPreparedPlanUi: true,
     singleActivePlanScreenshot, mode: 'isolated-fixture', electron: process.versions.electron, chromium: process.versions.chrome,
     views: window.contentView.children.length, secureRemote: true, sidebarIpc: true, archiveRestore: true, archiveRestart: true, deleteCancel: true, localDeletion: true, cloudChatPreserved: true, workspaceCreation: true, workspaceValidation: true, cancelPreservesSession: true, startupMessages: 4, canonicalPacketLoads: packetLoads, recoveryCache: true, operationProgress: true, progressScreenshot: path.join(dataDir, 'progress-ui.png'),
     tokenCounterRemoved: true, projectRename: true, sessionRename: true, sessionScopedTitleSync: true, restartKeepsSession: true, newChatCreatesSession: true, sessionTree: true, selectsEarlierSession: true, compactWorkspaceDetails: true, projectPathClipboard: true, sessionPlans: true, singleCurrentPlan: true, clientAutoPlan: true, autoPlan01TestAuto: true,
-    autoPlanFreshProcessModes: ['busy', 'sent', 'sending', 'manual', 'off'], autoPlanReloadNoDuplicate: true, manualChatWorkChoice: true, noAcceptanceButton: true, chromiumDiagnostics: true, contextWindowIndicatorRemoved: true, resizableSidebar: true, separateArchiveWindow: true, archiveMultiSelect: true, archiveForgetKeepsFolder: true, shellTheme: true, nativeTitlebarTheme: nativeTheme.shouldUseDarkColors, toolCallFilter: true, microphonePermission: true, geolocationPermission: true, cameraPermission: false, fullContextBytes: Buffer.byteLength(fixtureContext), liveChatGPT: false, agentToolsRequired: false };
+    autoPlanFreshProcessModes: ['busy', 'sent', 'sending', 'manual', 'off'], autoPlanReloadNoDuplicate: true, manualChatWorkChoice: true, noAcceptanceButton: true, chromiumDiagnostics: true, contextWindowIndicatorRemoved: true, resizableSidebar: true, separateArchiveWindow: true, archiveMultiSelect: true, archiveForgetKeepsFolder: true, archiveRecoveryAfterInterrupt: true, replacementFolderProtected: true, orphanSettingsConfirmed: true, orphanUnknownRefused: true, shellTheme: true, nativeTitlebarTheme: nativeTheme.shouldUseDarkColors, toolCallFilter: true, microphonePermission: true, geolocationPermission: true, cameraPermission: false, fullContextBytes: Buffer.byteLength(fixtureContext), liveChatGPT: false, agentToolsRequired: false };
   await fs.writeFile(path.join(dataDir, 'smoke-result.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
+}
+
+async function verifyDeletionRecoveryUi({sidebar,browser,store,snapshot,dataDir,deletion,execution,dialog,makeAux,getArchiveWindow,waitFor,neighbour}) {
+  assert.ok(path.basename(dataDir).startsWith('web-pilot-electron-smoke-'),'recovery tests never use the real profile');
+  const removed=await makeAux('Архив после прерывания','recovery-t005');
+  const replaced=await makeAux('Архив с новым владельцем','replacement-t005');
+  await sidebar.executeJavaScript('window.webPilot.openArchive()');
+  await waitFor(()=>!!getArchiveWindow()&&!getArchiveWindow().isDestroyed(),'recovery fixture archive window',snapshot);
+  const archive=getArchiveWindow().webContents;
+  await waitFor(()=>archive.executeJavaScript('typeof window.webPilotArchive === "object"'),'recovery fixture archive preload',snapshot);
+  await archive.executeJavaScript('window.webPilotArchive.cancelDelete()'); // refresh the newly seeded archives through real IPC
+  const row=item=>`[...document.querySelectorAll('[data-workspace]')].find(el=>el.dataset.workspace===${JSON.stringify(item.workspace)})`;
+  const confirmAndInterrupt=async item=>{
+    const realFinish=deletion.finish;
+    deletion.finish=async()=>{throw Error('fixture interruption after durable confirmed journal');};
+    try {
+      await waitFor(()=>archive.executeJavaScript('!!('+row(item)+')'),'new archived fixture listed',snapshot);
+      await archive.executeJavaScript('('+row(item)+').click()');
+      await archive.executeJavaScript('document.getElementById("delete").click()');
+      await waitFor(()=>archive.executeJavaScript('!document.getElementById("delete-panel").hidden'),
+        'archive preview confirmation',snapshot);
+      await archive.executeJavaScript(`(()=>{
+        const input=document.getElementById('delete-confirmation');
+        input.value=${JSON.stringify(item.name)};
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+        document.getElementById('confirm-delete').click();
+      })()`);
+      await waitFor(()=>archive.executeJavaScript('document.getElementById("notice").textContent.includes("fixture interruption")'),
+        'interrupted deletion reported by archive',snapshot);
+    }finally{deletion.finish=realFinish;}
+    assert.equal(deletion.isPending(item.workspace),true);
+    const journals=await Promise.all((await fs.readdir(deletion.journalDir)).map(async name=>
+      JSON.parse(await fs.readFile(path.join(deletion.journalDir,name),'utf8'))));
+    assert.equal(journals.find(job=>job.workspace===item.workspace)?.stage,'confirmed');
+    assert.ok(await archive.executeJavaScript('('+row(item)+').textContent.includes("удаление ожидает завершения")'));
+  };
+  await confirmAndInterrupt(removed);
+  await fs.rm(removed.workspace,{recursive:true}); // emulate external interruption using disposable fixture files
+  await archive.executeJavaScript('document.getElementById("recover").click()');
+  await waitFor(async()=>!store.project(removed.workspace)&&!deletion.isPending(removed.workspace)
+    &&(await fs.readdir(deletion.journalDir)).length===0,
+  'recovery through archive button completes',snapshot);
+  assert.equal(deletion.isPending(removed.workspace),false);
+  assert.deepEqual(await fs.readdir(deletion.journalDir),[]);
+  await waitFor(()=>archive.executeJavaScript('!('+row(removed)+')'),'completed row disappears without restart',snapshot);
+  const twice=await archive.executeJavaScript('window.webPilotArchive.recoverDeletions()');
+  assert.equal(twice.ok,true,'second archive recover has no effect');
+  await confirmAndInterrupt(replaced);
+  await fs.rm(replaced.workspace,{recursive:true});
+  await fs.mkdir(replaced.workspace);
+  await fs.writeFile(path.join(replaced.workspace,'new-project.txt'),'foreign directory: preserve');
+  await archive.executeJavaScript('document.getElementById("recover").click()');
+  await waitFor(()=>archive.executeJavaScript('document.getElementById("notice").textContent.includes("Исходная папка")'),
+    'replacement refusal is visible in the archive',snapshot);
+  assert.equal(await fs.readFile(path.join(replaced.workspace,'new-project.txt'),'utf8'),'foreign directory: preserve');
+  assert.ok(store.project(replaced.workspace),'the replaced project record remains for safe recovery');
+  await fs.rm(replaced.workspace,{recursive:true}); // fixture-only cleanup after refusal was verified
+  await archive.executeJavaScript('document.getElementById("recover").click()');
+  await waitFor(async()=>!store.project(replaced.workspace)&&!deletion.isPending(replaced.workspace)
+    &&(await fs.readdir(deletion.journalDir)).length===0,
+  'retry after removing disposable replacement',snapshot);
+  assert.deepEqual(await fs.readdir(deletion.journalDir),[]);
+  getArchiveWindow().close();
+
+  const parent=await makeAux('Уже удалённый родитель','orphan-parent-t005');
+  const parentRecord=store.snapshot().projects.find(p=>p.workspace===parent.workspace);
+  const assignmentId='wp-orphan-t005',orphanId='orphan-fixture-id-t005',orphanSessionId='web-pilot-orphan-fixture-005';
+  const orphanPath=path.join(path.dirname(parent.workspace),'.web-pilot-worktrees',
+    createHash('sha256').update(parent.workspace).digest('hex').slice(0,16),assignmentId);
+  const orphan={...structuredClone(parentRecord),workspace:orphanPath,projectId:orphanId,
+    parentWorkspace:parent.workspace,parentProjectId:parent.projectId,ownershipState:'recovery',
+    name:'Потерянный исполнитель',displayName:'Потерянный исполнитель',
+    selectedSessionId:orphanSessionId,sessions:[{...structuredClone(parentRecord.sessions[0]),
+      sessionId:orphanSessionId,chatUrl:'https://chatgpt.com/c/orphan-fixture-cloud-chat',
+      assignmentId,taskId:'T005',parentScopeId:'fixture-scope',parentWorkspace:parent.workspace,
+      parentProjectId:parent.projectId,executionOriginSessionId:parentRecord.sessions[0].sessionId}]};
+  await fs.mkdir(path.dirname(path.dirname(orphanPath)),{recursive:true}); // hashed group itself is absent
+  store.data.projects=store.data.projects.filter(p=>p.workspace!==parent.workspace);
+  store.data.projects.push(orphan);
+  await store.save();await fs.rm(parent.workspace,{recursive:true});await store.load();
+  assert.equal(store.project(orphanPath)?.ownershipState,'recovery');
+  assert.equal(snapshot().executorRecovery.filter(p=>p.workspace===orphanPath).length,1);
+  assert.equal(snapshot().projects.some(p=>p.workspace===orphanPath),false,'orphans only appear in recovery');
+  const cloudCount=await browser.executeJavaScript('window.fixtureMessages.length');
+  const nativeDialog=dialog.showMessageBox,confirmation=[];
+  let response=0;
+  dialog.showMessageBox=async options=>{confirmation.push(options);return {response};};
+  try {
+    await sidebar.executeJavaScript('window.webPilot.openSettings()');
+    await waitFor(()=>sidebar.executeJavaScript('!document.getElementById("executor-recovery").hidden'),
+      'orphan shown in settings recovery',snapshot);
+    const rows=()=>sidebar.executeJavaScript('document.querySelectorAll("#executor-recovery-items .executor-recovery-entry").length');
+    assert.equal(await rows(),1);
+    assert.match(await sidebar.executeJavaScript('document.getElementById("executor-recovery").textContent'),/Облачные чаты ChatGPT сохраняются/);
+    const click=async()=>{
+      // A native confirmation can resolve while the renderer is still finishing
+      // the previous action. Never drop a second click into actionPending.
+      await waitFor(()=>sidebar.executeJavaScript('!!document.querySelector("#executor-recovery-items button") && !document.querySelector("#executor-recovery-items button").disabled'),
+        'recovery action ready after previous confirmation',snapshot);
+      await sidebar.executeJavaScript('document.querySelector("#executor-recovery-items button").click()');
+    };
+    await click();
+    await waitFor(()=>confirmation.length===1,'native orphan confirmation requested',snapshot);
+    assert.deepEqual(confirmation[0].buttons,['Отмена','Убрать запись']);
+    assert.equal(confirmation[0].defaultId,0);
+    assert.match(confirmation[0].detail,/Облачные чаты ChatGPT сохраняются/);
+    assert.ok(store.project(orphanPath),'cancel keeps the orphan record');
+    response=1;
+    await fs.mkdir(orphanPath,{recursive:true});
+    await click();
+    await waitFor(()=>sidebar.executeJavaScript('document.getElementById("error-banner").textContent.includes("папк")'),
+      'present worktree refused before confirmation',snapshot);
+    assert.equal(confirmation.length,1,'a present folder never reaches the confirmation dialog');
+    assert.ok(store.project(orphanPath));
+    await fs.rm(orphanPath,{recursive:true});
+    execution.states.set(parent.workspace,{assignments:[{worktree:orphanPath,status:'UNKNOWN'}]});
+    await click();
+    await waitFor(()=>confirmation.length===2,'UNKNOWN command confirmation requested',snapshot);
+    await waitFor(()=>sidebar.executeJavaScript('document.getElementById("error-banner").textContent.includes("Исполнение не завершено")'),
+      'UNKNOWN command blocks cleanup',snapshot);
+    assert.ok(store.project(orphanPath));
+    execution.states.delete(parent.workspace);
+    const mismatch=await sidebar.executeJavaScript(`window.webPilot.clearOrphanExecutor({workspace:${JSON.stringify(orphanPath)},projectId:"wrong-project-id"})`);
+    assert.equal(mismatch.ok,false,'replacement project ID must not be removed');
+    await click();
+    await waitFor(()=>!store.project(orphanPath),'confirmed orphan cleanup through settings IPC',snapshot);
+    await waitFor(async()=>await rows()===0,'orphan disappears from the same renderer session',snapshot);
+    const restarted=new WorkspaceSessions(store.file);await restarted.load();
+    assert.equal(restarted.project(orphanPath),null,'cleanup survives storage restart');
+    assert.equal(restarted.project(parent.workspace),null);
+    assert.equal(await browser.executeJavaScript('window.fixtureMessages.length'),cloudCount,'remote conversation fixture remains untouched');
+    assert.ok(store.project(neighbour.workspace),'unrelated archived project survives');
+  }finally{dialog.showMessageBox=nativeDialog;execution.states.delete(parent.workspace);}
 }

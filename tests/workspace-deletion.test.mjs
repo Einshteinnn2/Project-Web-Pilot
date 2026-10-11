@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import { WorkspaceSessions, WorkspaceError } from '../src/workspace-session.mjs';
 import { WorkspaceDeletion } from '../src/workspace-deletion.mjs';
@@ -595,6 +596,21 @@ test('a traversal assignment cannot authorize removal outside its worktree group
   await fs.writeFile(path.join(assignments,'invalid.json'),JSON.stringify({id:'../keep',parent_root:a,worktree:victim}));
   await store.setArchived(a,true);await assert.rejects(service.preview(a),{code:'DELETE_WORKTREE_CHANGED'});
   assert.equal(await fs.readFile(path.join(victim,'keep'),'utf8'),'safe');assert.ok(await fs.stat(a));
+});
+
+test('Windows fixture keeps canonical hashed-worktree identity and distinct neighbouring roots',()=>{
+  // Cross-platform path contract only: this does not execute native Windows IPC.
+  const win=path.win32,parent='C:\\Users\\Fixture\\VSCODE\\Русский проект';
+  const sibling='C:\\Users\\Fixture\\VSCODE\\Русский проект 2';
+  const group=root=>win.join(win.dirname(root),'.web-pilot-worktrees',
+    createHash('sha256').update(root).digest('hex').slice(0,16));
+  const child=win.join(group(parent),'wp-fixture');
+  assert.equal(win.normalize(child),child);
+  assert.equal(win.dirname(child),group(parent));
+  assert.equal(win.dirname(group(parent)),win.join(win.dirname(parent),'.web-pilot-worktrees'));
+  assert.notEqual(group(parent),group(sibling),'different parents cannot share the hashed group');
+  assert.notEqual(win.join(group(parent),'wp-fixture'),win.join(group(parent),'wp-other'));
+  assert.equal(win.isAbsolute(child),true);
 });
 
 test('confirmed orphan removal only clears its exact local record, backup, settings and diagnostics',async t=>{

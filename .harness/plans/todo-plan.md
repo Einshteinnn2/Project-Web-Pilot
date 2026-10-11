@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1745,
+  "plan_revision": 1747,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "archive-deletion-recovery-20261011",
@@ -256,8 +256,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "archive-deletion-recovery-20261011",
         "task_id": "T005",
@@ -294,7 +294,12 @@
         "Проверены Windows-совместимые пути в unit fixture без заявления native Windows; независимое сохранение соседних проектов, ссылок и пользовательского профиля."
       ],
       "expected_commit_message": "test: закрепить полный цикл восстановления удаления в Electron",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "src/main.mjs",
+        "tests/electron-smoke.mjs",
+        "tests/workspace-deletion.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -481,7 +486,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: archive-deletion-recovery-20261011
 Current Task: нет
-Revision: 1745
+Revision: 1747
 
 ## Цель
 
@@ -524,8 +529,8 @@ Revision: 1745
   - Файлы: src/workspace-session.mjs, src/workspace-deletion.mjs, src/main.mjs, src/preload.cjs, src/ui/settings-panel.mjs, src/ui/index.html, tests/workspace-session.test.mjs, tests/workspace-deletion.test.mjs, tests/settings-parallel-execution.test.mjs, tests/sidebar.test.mjs
   - Параллельность: исключительное выполнение
   - Зависимости: T003
-- [TODO] T005: Сквозная регрессия архива, настроек и восстановления — Ожидает
-  - Git Commit: [PENDING] test: закрепить полный цикл восстановления удаления в Electron
+- [DONE] T005: Сквозная регрессия архива, настроек и восстановления — Завершено
+  - Git Commit: [DONE] test: закрепить полный цикл восстановления удаления в Electron
   - Reference: archive-deletion-recovery-20261011 / T005 / implementation
   - Файлы: tests/electron-smoke.mjs, tests/sidebar.test.mjs, tests/workspace-deletion.test.mjs, src/main.mjs, docs/planning/archive-deletion-recovery-spec.md, README.md, docs/modules/project-archive.md, docs/modules/workspace-sessions.md, docs/modules/workspace-sidebar-ui.md, docs/modules/chromium-diagnostics.md
   - Параллельность: исключительное выполнение
