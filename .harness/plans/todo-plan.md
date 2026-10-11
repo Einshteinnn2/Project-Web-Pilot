@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1792,
+  "plan_revision": 1794,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "chat-session-rotation-20261011",
@@ -241,8 +241,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "chat-session-rotation-20261011",
         "task_id": "T005",
@@ -278,7 +278,19 @@
         "Ротация фонового проекта выбирает новую сессию лишь внутри его дерева, не меняя видимый проект или чужого Chat; старые чаты сохранены."
       ],
       "expected_commit_message": "feat: Создавать новый Chat и передавать Recovery без повторов",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "docs/planning/chat-session-rotation-spec.md",
+        "src/chat-session-rotation.mjs",
+        "src/context-session.mjs",
+        "src/main.mjs",
+        "src/project-auto-plan.mjs",
+        "src/session-runtime.mjs",
+        "src/workspace-session.mjs",
+        "tests/context-session.test.mjs",
+        "tests/session-runtime.test.mjs",
+        "tests/workspace-session.test.mjs"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -554,7 +566,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: chat-session-rotation-20261011
 Current Task: нет
-Revision: 1792
+Revision: 1794
 
 ## Цель
 
@@ -595,8 +607,8 @@ Revision: 1792
   - Файлы: src/auto-plan.mjs, src/project-session-auto-plan.mjs, src/chat-session-rotation.mjs, tests/auto-plan.test.mjs, tests/chat-session-rotation.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: T003
-- [TODO] T005: Создавать новый Chat и передавать Recovery без повторов — Ожидает
-  - Git Commit: [PENDING] feat: Создавать новый Chat и передавать Recovery без повторов
+- [DONE] T005: Создавать новый Chat и передавать Recovery без повторов — Завершено
+  - Git Commit: [DONE] feat: Создавать новый Chat и передавать Recovery без повторов
   - Reference: chat-session-rotation-20261011 / T005 / implementation
   - Файлы: src/chat-session-rotation.mjs, src/main.mjs, src/workspace-session.mjs, src/session-runtime.mjs, src/context-session.mjs, src/project-auto-plan.mjs, tests/chat-session-rotation.test.mjs, tests/workspace-session.test.mjs, tests/context-session.test.mjs, tests/session-runtime.test.mjs, docs/planning/chat-session-rotation-spec.md
   - Параллельность: исключительное выполнение

@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { validateParallelSettings } from './parallel-settings.mjs';
+import { rotationOperationId } from './chat-session-rotation.mjs';
 import {plannedExecution} from './execution-projection.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -232,6 +233,16 @@ function validate(data) {
           || (s.chatUrl !== null && (!normalizeChatUrl(s.chatUrl) || normalizeChatUrl(s.chatUrl) !== s.chatUrl
             || !conversationUrlCompatibleWithExperience(s.chatUrl, s.experience)))) throw invalid();
       if (s.manualStart !== undefined && typeof s.manualStart !== 'boolean') throw invalid();
+      if (s.rotation !== undefined) {
+        const r=s.rotation;
+        if (s.experience!=='chat'||!r||!/^rotation-[a-f0-9]{64}$/.test(r.id)
+            ||typeof r.sourceSessionId!=='string'||!r.sourceSessionId
+            ||typeof r.scopeId!=='string'||!r.scopeId
+            ||typeof r.boundary!=='string'||!/^[a-f0-9]{40,64}$/.test(r.boundary)
+            ||typeof r.creationHead!=='string'||!/^[a-f0-9]{40,64}$/.test(r.creationHead))throw invalid();
+        if(r.id!==rotationOperationId({workspace:p.workspace,projectId:p.projectId,
+            scopeId:r.scopeId,sessionId:r.sourceSessionId,boundary:r.boundary}))throw invalid();
+      }
       if(s.assignmentId!==undefined) {
         if(!/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(s.assignmentId)||typeof s.taskId!=='string'
           ||typeof s.parentScopeId!=='string'||typeof s.parentWorkspace!=='string'||!path.isAbsolute(s.parentWorkspace)
@@ -566,14 +577,39 @@ export class WorkspaceSessions {
     });
   }
 
-  newSession(workspace, experience, { executionSnapshot } = {}) {
+  newSession(workspace, experience, { executionSnapshot, rotation = null } = {}) {
     return this.mutate(async data => {
       experience = sessionExperience(experience);
       const project = data.projects.find(p => p.workspace === workspace);
       if (!project) throw new WorkspaceError('WORKSPACE_REQUIRED', 'Сначала выберите проект.');
       if (project.archivedAt) throw new WorkspaceError('PROJECT_ARCHIVED', 'Сначала верните проект из архива.');
+      if(rotation){
+        if(project.parentWorkspace||experience!=='chat'||!/^rotation-[a-f0-9]{64}$/.test(rotation.id??'')
+          ||typeof rotation.sourceSessionId!=='string'||typeof rotation.scopeId!=='string'
+          ||!/^[a-f0-9]{40,64}$/.test(rotation.boundary??'')
+          ||!/^[a-f0-9]{40,64}$/.test(rotation.creationHead??'')
+          ||rotation.id!==rotationOperationId({workspace,projectId:project.projectId,
+            scopeId:rotation.scopeId,sessionId:rotation.sourceSessionId,boundary:rotation.boundary}))
+          throw new WorkspaceError('ROTATION_OPERATION_INVALID','Некорректная операция ротации Chat.');
+        const existing=project.sessions.find(s=>s.rotation?.id===rotation.id);
+        if(existing){
+          if(existing.archivedAt||existing.rotation.sourceSessionId!==rotation.sourceSessionId
+            ||existing.rotation.scopeId!==rotation.scopeId||existing.rotation.boundary!==rotation.boundary
+            ||existing.rotation.creationHead!==rotation.creationHead)
+            throw new WorkspaceError('ROTATION_OPERATION_CONFLICT','Данные сохранённой ротации отличаются.');
+          return currentView(project,existing.sessionId);
+        }
+        const verified=await this.inspect(workspace,rotation.sourceSessionId);
+        if(!project.sessions.some(s=>s.sessionId===rotation.sourceSessionId&&s.experience==='chat'&&!s.archivedAt)
+          ||verified.projectId!==project.projectId||verified.scopeId!==rotation.scopeId
+          ||verified.scopeStatus!=='ACTIVE'||verified.planExecution?.execution_strategy!=='sequential'
+          ||verified.planView?.tasks?.every(t=>t.status==='done'))
+          throw new WorkspaceError('ROTATION_SOURCE_CHANGED','Источник или план ротации больше не подтверждён.');
+      }
       // An explicitly inherited snapshot never consults the current Settings.
       const session = this.createSession(experience, executionSnapshot);
+      if(rotation)session.rotation={id:rotation.id,sourceSessionId:rotation.sourceSessionId,
+        scopeId:rotation.scopeId,boundary:rotation.boundary,creationHead:rotation.creationHead};
       project.sessions.push(session); project.selectedSessionId = session.sessionId; project.expanded = true;
       const info = await this.inspect(workspace, session.sessionId);
       Object.assign(project, info);

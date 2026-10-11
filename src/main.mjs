@@ -19,6 +19,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WorkspaceSessions, normalizeChatUrl, activeSessionsNewestFirst } from './workspace-session.mjs';
 import { DEFAULT_PARALLEL_SETTINGS, validateParallelSettings } from './parallel-settings.mjs';
 import { DEFAULT_CHAT_SESSION_TASK_LIMIT, restoreChatSessionTaskLimit, validateChatSessionTaskLimit } from './chat-session-rotation-settings.mjs';
+import { readChatSessionTaskProof } from './auto-plan-state.mjs';
+import { rotationOperationId } from './chat-session-rotation.mjs';
 import { installChatGPTAutoScroll } from './chatgpt-auto-scroll.mjs';
 import { ChatColors, normalizeChatColors, validateColorChange, DEFAULT_COLORS } from './chatgpt-colors.mjs';
 import { ChatColorsWindow } from './chat-colors-window.mjs';
@@ -96,7 +98,8 @@ const projectAutoPlan=new ProjectAutoPlan({identity:workspace=>store.snapshot().
     record.primaryAutomation?.update();
     if(record.executor){record.executor.setEnabled(projectAutoPlan.enabled(workspace,project.parentScopeId));record.controller.signal();}
   }
-  void saveSettings().catch(report);void execution.signal(workspace);publish();
+  const persisted=saveSettings();void persisted.catch(report);void execution.signal(workspace);publish();
+  return persisted;
 }});
 let reviewCheckpoint = null, automationCheckpoint = null;
 let chatColors = normalizeChatColors();
@@ -187,6 +190,8 @@ const autoPlan=new Proxy({}, {
 function configurePrimary(record) {
   return configureProjectAutoPlan(record,{store,authorization:projectAutoPlan,
     inspectPlan:selected=>readAutoPlanState(selected,workspaceSetup.environment),onChange:()=>publish(),
+    inspectTaskProof:selected=>readChatSessionTaskProof(selected,workspaceSetup.environment),
+    taskLimit:()=>chatSessionTaskLimit,onRotationReady:prepareChatRotation,
     log:(event,fields)=>record.diagnostics?.log.record('auto-plan',event,fields)});
 }
 const planReview = new PlanReviewClient({selected:()=>store.selected(),onChange:()=>publish()});
@@ -249,6 +254,75 @@ authorizedExecutionKit.read=async workspace=>{
 };
 store.git=(workspace,args)=>executionKit.git(workspace,['--no-optional-locks',...args]);
 const liveRecord=project=>project&&liveSessions.records.get(sessionRuntimeKey(project));
+
+// Only a committed boundary from the original main Chat may create a new
+// session. The operation key is derived from immutable proof and persisted in
+// the new session record by one WorkspaceSessions mutation. A retry discovers
+// the same target instead of allocating a second identity.
+async function prepareChatRotation({selected,boundary}) {
+  const source=store.project(selected?.workspace,selected?.sessionId);
+  const permission=projectAutoPlan.state(selected?.workspace);
+  const currentPlan=source&&await readAutoPlanState(source,workspaceSetup.environment);
+  if(!source||source.projectId!==selected.projectId||source.experience!=='chat'
+    ||source.archivedAt||source.sessionArchivedAt||source.scopeId!==selected.scopeId
+    ||currentPlan?.confirmed!==true||currentPlan.scopeId!==selected.scopeId
+    ||currentPlan.planExecution?.execution_strategy!=='sequential'
+    ||!permission?.enabled||permission.scopeId!==selected.scopeId||permission.sessionId!==selected.sessionId)
+    throw Object.assign(new Error('Ротация больше не принадлежит текущему Chat и плану.'),{code:'ROTATION_SOURCE_CHANGED'});
+  const cursor=projectAutoPlan.checkpoint(source.workspace,source.scopeId,source.sessionId).chatTaskCursor;
+  if(cursor?.counted?.at(-1)?.sha!==boundary)
+    throw Object.assign(new Error('Граница выполненной микрозадачи изменилась.'),{code:'ROTATION_BOUNDARY_CHANGED'});
+  const rotation={id:rotationOperationId({workspace:source.workspace,projectId:source.projectId,
+    scopeId:source.scopeId,sessionId:source.sessionId,boundary}),sourceSessionId:source.sessionId,
+    scopeId:source.scopeId,boundary,creationHead:cursor.head};
+  const wasVisible=liveSessions.visible?.identity?.workspace===source.workspace
+    &&liveSessions.visible?.identity?.sessionId===source.sessionId;
+  const target=await store.newSession(source.workspace,'chat',{
+    executionSnapshot:source.executionSnapshot,rotation});
+  if(!target||target.rotation?.id!==rotation.id)
+    throw Object.assign(new Error('Новая сессия не была сохранена.'),{code:'ROTATION_TARGET_MISSING'});
+  const record=await openRecordedRotation(target);
+  if(wasVisible && store.selected()?.workspace===source.workspace
+      &&store.selected()?.sessionId===target.sessionId && !record.disposed){
+    selectLiveSession(target);
+    publish();
+  }
+  return {sessionId:target.sessionId,phase:record.controller.state.phase};
+}
+
+async function openRecordedRotation(target) {
+  const baseline=await readChatSessionTaskProof(target,workspaceSetup.environment);
+  if(baseline.confirmed!==true)
+    throw Object.assign(new Error('Не удалось подтвердить исходное состояние новой Chat-сессии.'),{code:'ROTATION_BASELINE_UNAVAILABLE'});
+  const saved=projectAutoPlan.checkpoint(target.workspace,target.scopeId,target.sessionId).chatTaskCursor;
+  if(!saved && baseline.head!==target.rotation.creationHead)
+    throw Object.assign(new Error('Git изменился после создания Chat до сохранения его начального счётчика.'),
+      {code:'ROTATION_BASELINE_CHANGED'});
+  const counted=projectAutoPlan.recordTaskProof(target.workspace,target.sessionId,baseline);
+  if(!counted.recorded || (projectAutoPlan.checkpoint(target.workspace,target.scopeId,target.sessionId).chatTaskCursor===undefined
+      ||counted.count!==0))
+    throw Object.assign(new Error('Не удалось сохранить начальную границу новой Chat-сессии.'),{code:'ROTATION_BASELINE_UNAVAILABLE'});
+  await saveSettings(); // durable baseline, before new ContextSession can send
+  return liveSessions.openRotationChat(target,{checkReady:workspace=>workspaceSetup.ready(workspace)});
+}
+
+// Reopen only an already recorded destination. On restart the native
+// ContextSession examines its durable attempt: sent/UNKNOWN is never replayed.
+function restoreRotationPages() {
+  const visible=store.selected();
+  for(const project of store.snapshot().projects.filter(p=>!p.archivedAt&&!p.parentWorkspace))
+    for(const session of project.sessions.filter(s=>s.rotation&&!s.archivedAt)){
+      const permission=projectAutoPlan.state(project.workspace);
+      if(!permission?.enabled||permission.scopeId!==session.rotation.scopeId
+          ||permission.sessionId!==session.rotation.sourceSessionId
+          ||!project.sessions.some(s=>s.sessionId===session.rotation.sourceSessionId&&!s.archivedAt))continue;
+      if(project.workspace===visible?.workspace&&session.sessionId===visible.sessionId)continue;
+      const target=store.project(project.workspace,session.sessionId);
+      if(!target || liveRecord(target)?.ready)continue;
+      void openRecordedRotation(target)
+        .catch(error=>{const record=liveRecord(target);if(record)sessionRuntimeError(record,error);else report(error);});
+    }
+}
 async function restoreExecutionPage(project,assignment=null) {
   if(liveRecord(project)?.ready&&(!assignment||liveRecord(project).executor))return project;
   if(!project?.chatUrl||(!project.manualStart&&!project.attempt?.sendStartedAtMs&&!['sent','acknowledged'].includes(project.attempt?.state)))
@@ -1600,6 +1674,7 @@ async function createWindow() {
   createStartupFlow();
   registerIpc();
   await sidebar.webContents.loadURL(sidebarUrl);
+  if(!storageError)restoreRotationPages();
   if (startupFlow) void startupFlow.check({ prepare: startupActive });
   if (eventRuntimeChecker) {
     eventRuntimeCheckerTimer = setInterval(checkEventRuntimeState, 2000);

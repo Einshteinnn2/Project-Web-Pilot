@@ -6,6 +6,7 @@ import os from 'node:os';
 import { randomUUID, createHash } from 'node:crypto';
 import { WorkspaceSessions, readWorkspace, normalizeChatUrl, conversationExperience, conversationUrlCompatibleWithExperience, activeSessionsNewestFirst } from '../src/workspace-session.mjs';
 import { sessionExecutionMessage } from '../src/context-session.mjs';
+import { rotationOperationId } from '../src/chat-session-rotation.mjs';
 
 const directoryLink = (target, link) => fs.symlink(target, link, process.platform === 'win32' ? 'junction' : 'dir');
 
@@ -155,6 +156,44 @@ test('execution settings are captured at creation, independent of edits, selecti
   restarted.getExecutionSettings = () => { throw new Error('Inherited snapshot must not read Settings'); };
   const inherited = { parallel_allowed: true, max_workers: 3 };
   assert.deepEqual((await restarted.newSession(first.workspace, 'chat', { executionSnapshot: inherited })).executionSnapshot, inherited);
+});
+
+test('rotated Chat is atomic and idempotent across retries/restart, without selecting its background project',async t=>{
+  const {project,store}=await fixture(t);
+  const workspace=await project('Rotation source');
+  await changeScopePlan(workspace,{parallel_allowed:false,max_workers:1,execution_strategy:'sequential',
+    execution_reason:'Chat rotation fixture'});
+  const source=await store.select(workspace);
+  const neighbour=await store.select(await project('Visible neighbour'));
+  const boundary='c'.repeat(40);
+  const rotation={id:rotationOperationId({workspace:source.workspace,projectId:source.projectId,
+    scopeId:source.scopeId,sessionId:source.sessionId,boundary}),
+    sourceSessionId:source.sessionId,scopeId:source.scopeId,boundary,creationHead:'a'.repeat(40)};
+  const [a,b]=await Promise.all([
+    store.newSession(source.workspace,'chat',{rotation,executionSnapshot:source.executionSnapshot}),
+    store.newSession(source.workspace,'chat',{rotation,executionSnapshot:source.executionSnapshot}),
+  ]);
+  assert.equal(a.sessionId,b.sessionId,'concurrent duplicate operation uses one session');
+  assert.equal(a.experience,'chat');assert.deepEqual(a.rotation,rotation);
+  assert.equal(store.selected().workspace,neighbour.workspace,'global selection must remain in neighbour');
+  assert.equal(store.project(source.workspace).sessionId,a.sessionId,'only own project selectedSessionId changes');
+  const sessions=store.snapshot().projects.find(p=>p.workspace===source.workspace).sessions;
+  assert.equal(sessions.length,2,'original Chat is kept');
+  assert.ok(sessions.some(s=>s.sessionId===source.sessionId));
+  await store.updateSession(source.workspace,a.sessionId,{attempt:{state:'unknown',sendStartedAtMs:1000}},{background:true});
+  const restarted=new WorkspaceSessions(store.file);await restarted.load();
+  assert.equal(restarted.selected().workspace,neighbour.workspace);
+  const found=await restarted.newSession(source.workspace,'chat',{rotation});
+  assert.equal(found.sessionId,a.sessionId,'restart/replay cannot allocate another target');
+  assert.equal(found.attempt.state,'unknown','the interrupted context attempt remains intact');
+  assert.equal(restarted.snapshot().projects.find(p=>p.workspace===source.workspace).sessions.length,2);
+  await restarted.setSessionArchived(source.workspace,source.sessionId,true);
+  const afterArchive=new WorkspaceSessions(store.file);await afterArchive.load();
+  assert.equal(afterArchive.project(source.workspace,a.sessionId).rotation.id,rotation.id,
+    'historical provenance stays valid even after archiving the original Chat');
+  await assert.rejects(restarted.newSession(source.workspace,'chat',{rotation:{...rotation,boundary:'d'.repeat(40)}}),
+    {code:'ROTATION_OPERATION_INVALID'});
+  await assert.rejects(restarted.newSession(source.workspace,'work',{rotation}),{code:'ROTATION_OPERATION_INVALID'});
 });
 
 test('new sessions preserve active plan parameters without creating or rewriting a plan', async t => {

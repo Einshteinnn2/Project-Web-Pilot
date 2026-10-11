@@ -83,7 +83,7 @@ export class ProjectAutoPlan {
   checkpoint(workspace,scopeId,sessionId){return this.state(workspace)&&this.state(workspace).scopeId===scopeId?this.state(workspace).sessions[sessionId]??{}:{};}
   saveCheckpoint(workspace,scopeId,sessionId,patch) {
     if(!this.state(workspace)||this.state(workspace).scopeId!==scopeId||!this.ownsSession(workspace,sessionId))return;
-    this.state(workspace).sessions[sessionId]={...this.checkpoint(workspace,scopeId,sessionId),...patch};this.onChange(workspace);
+    this.state(workspace).sessions[sessionId]={...this.checkpoint(workspace,scopeId,sessionId),...patch};return this.onChange(workspace);
   }
   // Read-only with respect to permission: counting never toggles AutoPlan or
   // transfers its recipient. The caller must persist settings before relying

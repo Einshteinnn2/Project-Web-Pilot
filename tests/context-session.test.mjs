@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { ContextCache } from '../src/context-cache.mjs';
-import { ContextSession, externalClientLine, packetMatchesProject, startupMessage } from '../src/context-session.mjs';
+import { ContextSession, externalClientLine, packetMatchesProject, startupMessage, rotationRecoveryStatus } from '../src/context-session.mjs';
 import * as contextSessionModule from '../src/context-session.mjs';
 import { EXECUTOR_TOOL_RULES } from '../src/mac-runtime-switch.mjs';
 
@@ -12,6 +12,25 @@ const project={workspace:'/Projects/Мой проект',projectId:'id-1',name:'
 const facts={project_id:project.projectId,project_name:project.name,plan_revision:7,scope_id:'scope-1',
   execution_scope_status:'ACTIVE',delivery_status:'IN_PROGRESS',task_id:'T001',task_title:'Read'};
 const now=2000000;
+
+test('rotation recovery uses normal durable ContextSession phases and never replays an attempted Send',async()=>{
+  const f=controllerFixture({chatUrl:null});
+  const rotation={id:'rotation-'+'a'.repeat(64),sourceSessionId:'previous',scopeId:'scope-1',boundary:'b'.repeat(40)};
+  f.saved.rotation=rotation;
+  assert.deepEqual(rotationRecoveryStatus(f.saved,'selected'),{state:'waiting',retry:true});
+  await f.controller.tick();
+  assert.equal(f.sends(),1);
+  await f.controller.tick();
+  assert.equal(f.controller.state.phase,'delivered');
+  assert.deepEqual(rotationRecoveryStatus(f.saved,'delivered'),{state:'delivered',retry:false});
+  f.controller.attach(f.saved);
+  await f.controller.tick();
+  assert.equal(f.sends(),1,'restarting a previously sent Recovery cannot send it twice');
+  const unknown={...f.saved,attempt:{...f.saved.attempt,state:'unknown'}};
+  assert.deepEqual(rotationRecoveryStatus(unknown,'send-unknown'),{state:'blocked',retry:false});
+  assert.deepEqual(rotationRecoveryStatus({...f.saved,manualStart:true},'manual-session'),{state:'blocked',retry:false});
+  assert.equal(rotationRecoveryStatus({...f.saved,rotation:undefined},'delivered'),null);
+});
 
 test('explicit preparation retry retains drafts and cannot replay a sent or unknown request',async()=>{
   const f=controllerFixture();f.controller.state={phase:'error',error:{code:'CONTEXT_INPUTS_UNAVAILABLE'}};

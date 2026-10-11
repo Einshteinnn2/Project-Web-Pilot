@@ -71,3 +71,25 @@ test('late navigation completion cannot revive a released session',async t=>{
   const pending=f.manager.navigate(a,f.projects.a.chatUrl);f.manager.release(a,{force:true});finish();
   assert.equal(await pending,null);assert.equal(a.controller.active,null);assert.equal(a.view.webContents.destroyed,true);
 });
+
+test('rotated Chat uses a separate background Runtime and never changes the visible host',async t=>{
+  const f=fixture(t);
+  const original=f.manager.ensure(f.projects.a),host=f.host();f.manager.show(original,host);
+  const target={...f.projects.b,experience:'chat',chatUrl:null,
+    rotation:{id:'rotation-'+'a'.repeat(64),sourceSessionId:'a',scopeId:'scope',boundary:'c'.repeat(40),creationHead:'b'.repeat(40)}};
+  f.projects.b=target;
+  let readiness=0;
+  const record=await f.manager.openRotationChat(target,{checkReady:async()=>{readiness++;return {ready:true};}});
+  assert.equal(readiness,1);
+  assert.notEqual(record,original);
+  assert.equal(record.ready,true);
+  assert.equal(record.controller.active?.sessionId,'b');
+  assert.equal(record.view.webContents.getURL(),'https://chatgpt.com/');
+  assert.equal(f.manager.visible,original);
+  assert.equal(host.children.has(original.view),true);
+  assert.equal(host.children.has(record.view),false);
+  assert.equal(record.view.webContents.loads.length,1);
+  await f.manager.openRotationChat(target,{checkReady:async()=>({ready:true})});
+  assert.equal(record.view.webContents.loads.length,1,'a repeated recovery event does not reload the target');
+  await assert.rejects(f.manager.openRotationChat({...target,experience:'work'}),{code:'ROTATION_TARGET_INVALID'});
+});

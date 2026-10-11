@@ -3,6 +3,7 @@ import { ContextSession } from './context-session.mjs';
 import { ChatGPTComposer } from './chatgpt-composer.mjs';
 import { AgentTimer } from './agent-timer.mjs';
 import { ConversationRecovery } from './conversation-recovery.mjs';
+import { chatGPTEntrypoint } from './chatgpt-experience.mjs';
 
 export const sessionRuntimeKey = project => project ? JSON.stringify([
   project.workspace, project.sessionId, project.assignmentId ?? null, project.taskId ?? null,
@@ -120,6 +121,24 @@ export class SessionRuntimes {
       if(record.disposed||epoch!==record.epoch)return null;
       record.loading=false;this.tick(record,{freshDraft});return record;
     }catch(error){if(!record.disposed&&epoch===record.epoch){record.loading=false;this.onError(record,error);}throw error;}
+  }
+  // A new main Chat can start in the background without changing the host's
+  // selected project. The existing ContextSession owns preparation and Send;
+  // on restart an attempted/UNKNOWN request is observed, never sent again.
+  async openRotationChat(project,{checkReady=async()=>({ready:true})}={}) {
+    if(project?.experience!=='chat'||!project.rotation?.id||project.archivedAt||project.sessionArchivedAt)
+      throw Object.assign(new Error('Новая Chat-сессия ротации недоступна.'),{code:'ROTATION_TARGET_INVALID'});
+    const record=this.ensure(project);
+    if(record.disposed)throw Object.assign(new Error('Runtime сессии закрыт.'),{code:'ROTATION_TARGET_INVALID'});
+    const status=await checkReady(project.workspace);
+    if(!status?.ready)throw Object.assign(new Error('Нельзя подготовить проект для Recovery.'),{code:'ROTATION_TARGET_NOT_READY'});
+    if(record.disposed)throw Object.assign(new Error('Runtime сессии закрыт.'),{code:'ROTATION_TARGET_INVALID'});
+    record.ready=true;
+    const target=project.chatUrl??chatGPTEntrypoint('chat');
+    if(record.view.webContents.getURL()!==target)
+      await this.navigate(record,target,{freshDraft:!project.chatUrl&&!project.attempt});
+    else this.tick(record,{freshDraft:!project.chatUrl&&!project.attempt});
+    return record;
   }
   release(record,{force=false}={}) {
     if(!record||record.disposed)return false;

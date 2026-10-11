@@ -93,6 +93,19 @@ const metadata = packet => ({ workspace: packet.workspace, session_id: packet.se
   preparationMs: packet.preparation?.ms, cacheHit: packet.preparation?.cacheHit });
 const isModeEntrypoint = value => /^https:\/\/chatgpt\.com\/(?:work\/?)?(?:[?#].*)?$/.test(value);
 const failure = (code, message) => Object.assign(new Error(message), { code });
+
+// A passive status for rotated sessions. It never calls deliver() or retry():
+// the existing ContextSession state machine is the only owner of startup Send.
+export function rotationRecoveryStatus(project, phase) {
+  if (!project?.rotation?.id) return null;
+  const attempt=project.attempt;
+  if(project.manualStart || ['error','chat-changed','legacy-session','send-unknown'].includes(phase)
+      || attempt?.state==='unknown'||attempt?.state==='sending')
+    return {state:'blocked',retry:false};
+  if(phase==='delivered' && project.chatUrl && attempt?.state==='sent')
+    return {state:'delivered',retry:false};
+  return {state:'waiting',retry:!attempt?.sendStartedAtMs};
+}
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export class ContextSession {

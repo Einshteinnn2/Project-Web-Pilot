@@ -1,9 +1,19 @@
 // A durable per-Chat cursor over *verified* Workflow Kit task commits. This
 // deliberately does not create sessions or intercept Composer: those are the
 // responsibilities of the later rotation/handoff stages.
+import { createHash } from 'node:crypto';
 const sha = value => typeof value === 'string' && /^[a-f0-9]{40,64}$/.test(value);
 const error = (code, message) => Object.assign(new Error(message), { code });
 const copy = value => structuredClone(value);
+
+// No random second identity: a crash before the caller saves the destination
+// must not cause a second session to appear for the same confirmed boundary.
+export function rotationOperationId({ workspace, projectId, scopeId, sessionId, boundary }) {
+  if (typeof workspace !== 'string' || !workspace || typeof projectId !== 'string' || !projectId
+      || typeof scopeId !== 'string' || !scopeId || typeof sessionId !== 'string' || !sessionId || !sha(boundary))
+    throw error('ROTATION_OPERATION_INVALID', 'Не удалось определить подтверждённую границу смены Chat.');
+  return 'rotation-' + createHash('sha256').update(JSON.stringify([workspace,projectId,scopeId,sessionId,boundary])).digest('hex');
+}
 
 // Called after the existing AutoPlan eligibility gates and again immediately
 // before Composer click. Checking quota never creates a Chat by itself.
