@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1763,
+  "plan_revision": 1767,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "rollback-112-release-115-20261012",
@@ -34,7 +34,10 @@
       "docs/modules/workspace-sidebar-ui.md",
       "docs/modules/project-archive.md",
       "docs/modules/chromium-diagnostics.md",
-      "docs/planning/archive-deletion-recovery-spec.md"
+      "docs/planning/archive-deletion-recovery-spec.md",
+      "docs/modules/parallel-execution-acceptance.md",
+      "docs/modules/plan-view.md",
+      "docs/modules/release-verification.md"
     ]
   },
   "baseline_commit": "a1cd02424932d4666fd43cbcd6a61a7f2d5e2a31",
@@ -44,7 +47,7 @@
       {
         "path": "docs/planning/rollback-112-release-115-spec.md",
         "required": true,
-        "revision": "WORKTREE"
+        "revision": "b3117fc7b402d8da46e8440da2d67758bfa1feb0"
       },
       {
         "path": "docs/modules/release.md",
@@ -100,8 +103,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "rollback-112-release-115-20261012",
         "task_id": "DOCS",
@@ -124,7 +127,10 @@
         "docs/modules/project-archive.md",
         "docs/modules/chromium-diagnostics.md",
         "docs/planning/archive-deletion-recovery-spec.md",
-        "docs/planning/rollback-112-release-115-spec.md"
+        "docs/planning/rollback-112-release-115-spec.md",
+        "docs/modules/parallel-execution-acceptance.md",
+        "docs/modules/plan-view.md",
+        "docs/modules/release-verification.md"
       ],
       "verification_ids": [],
       "id": "DOCS",
@@ -137,7 +143,18 @@
         "Будущий рефакторинг не объявлен реализованным; DOCS закончена до сборки."
       ],
       "expected_commit_message": "docs: Актуализировать документы восстановленной поставки",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "README.md",
+        "docs/architecture/OVERVIEW.md",
+        "docs/modules/auto-plan.md",
+        "docs/modules/parallel-execution-acceptance.md",
+        "docs/modules/plan-view.md",
+        "docs/modules/release.md",
+        "docs/modules/release-verification.md",
+        "docs/planning/archive-deletion-recovery-spec.md",
+        "docs/planning/rollback-112-release-115-spec.md"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -258,7 +275,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: rollback-112-release-115-20261012
 Current Task: нет
-Revision: 1763
+Revision: 1767
 
 ## Цель
 
@@ -281,10 +298,10 @@ Revision: 1763
   - Файлы: package.json, package-lock.json, docs/planning/rollback-112-release-115-spec.md
   - Параллельность: исключительное выполнение
   - Зависимости: нет
-- [TODO] DOCS: Актуализация всех документов проекта — Ожидает
-  - Git Commit: [PENDING] docs: Актуализировать документы восстановленной поставки
+- [DONE] DOCS: Актуализация всех документов проекта — Завершено
+  - Git Commit: [DONE] docs: Актуализировать документы восстановленной поставки
   - Reference: rollback-112-release-115-20261012 / DOCS / implementation
-  - Файлы: README.md, docs/architecture/OVERVIEW.md, docs/modules/release.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/context-delivery.md, docs/modules/session-runtime.md, docs/modules/workspace-sessions.md, docs/modules/workspace-sidebar-ui.md, docs/modules/project-archive.md, docs/modules/chromium-diagnostics.md, docs/planning/archive-deletion-recovery-spec.md, docs/planning/rollback-112-release-115-spec.md
+  - Файлы: README.md, docs/architecture/OVERVIEW.md, docs/modules/release.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/context-delivery.md, docs/modules/session-runtime.md, docs/modules/workspace-sessions.md, docs/modules/workspace-sidebar-ui.md, docs/modules/project-archive.md, docs/modules/chromium-diagnostics.md, docs/planning/archive-deletion-recovery-spec.md, docs/planning/rollback-112-release-115-spec.md, docs/modules/parallel-execution-acceptance.md, docs/modules/plan-view.md, docs/modules/release-verification.md
   - Параллельность: исключительное выполнение
   - Зависимости: T001
 - [TODO] T002: Собрать единственный парный выпуск 0.6.115 — Ожидает

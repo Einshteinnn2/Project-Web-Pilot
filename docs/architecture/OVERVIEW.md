@@ -1,6 +1,6 @@
 # Краткая архитектура проекта
 
-Стек: Workflow Kit 1.7.2, Electron 44.5.1, Node 24.21.0. Последний опубликованный выпуск — **0.6.110**. В `package.json`/`package-lock.json` и Git зафиксирована **0.6.112**, но сборка, установка и публикация ещё не выполнялись; промежуточная 0.6.111 не выпускалась. Установка — [README](../../README.md), работа — current plan и Git; свидетельства выпуска появятся в `release-manifest.json` и GitHub Release после delivery. Постоянные ограничения — [AGENTS.md](../../AGENTS.md).
+Стек: Workflow Kit 1.7.2, Electron 44.5.1, Node 24.21.0. Версия **0.6.115** переиздаёт опубликованную базу **0.6.112**; код приложения восстановлен без доработок AutoPlan 0.6.113 и ротации Chat 0.6.114. Будущий рефакторинг выполнения в эту поставку не входит. Установка — [README](../../README.md), состояние работы — current plan и Git, факты готовности пакетов — `release-manifest.json` и GitHub Release. Постоянные ограничения — [AGENTS.md](../../AGENTS.md).
 
 ## Назначение
 
@@ -63,7 +63,7 @@ Web Pilot Sidebar — отдельный репозиторий; публичн�
 
 ## Проверки и документы
 
-`npm start` запускает исходники; `npm test` — Node suite; `npm run smoke` — Electron TEST FIXTURE; `npm run build` — парный выпуск macOS arm64 + Windows x64. Назначенные `verification_ids` запускает Kit при `commit`. Для **0.6.112** задача **T006** закрепила package manifests и проверку `release-source`; затем **DOCS** фиксирует контракты, **T007** — единственный `paired-release`, **T008** — установка готового пакета, **T009** — сверка GitHub без пересборки. `releaseAll` отказывает на незакоммиченных `package*.json`. `sourceCommit` — HEAD после DOCS, непосредственно перед сборкой, а не последующий сборочный коммит. Вручную build и обход Git hooks запрещены. Контракт — [release](../modules/release.md).
+`npm start` запускает исходники; `npm test` — Node suite; `npm run smoke` — Electron TEST FIXTURE; `npm run build` — парный выпуск macOS arm64 + Windows x64. Назначенные `verification_ids` запускает Kit при `commit`. Для **0.6.115** **T001** закрепляет package manifests, сверку исходников с базой 0.6.112 и `release-source` типа test; **DOCS** актуализирует контракты; **T002** выполняет единственный `paired-release`, **T003** устанавливает готовый пакет, **T004** синхронизирует новую линию main и GitHub без пересборки. `releaseAll` отказывает на незакоммиченных `package*.json`. `sourceCommit` — HEAD после DOCS непосредственно перед сборкой. Разовое перемещение remote main допускается только с точным lease по прямому поручению пользователя; обычные push остаются fast-forward. Контракт — [release](../modules/release.md).
 
 Fixtures не подтверждают живой ChatGPT, native Windows или чистую ОС; это [пользовательская приёмка](../modules/parallel-execution-acceptance.md). [Отложенный аудит](../modules/technical-audit-followups.md) в выпуск не входит.
 
