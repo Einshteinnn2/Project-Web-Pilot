@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1769,
+  "plan_revision": 1771,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "rollback-112-release-115-20261012",
@@ -187,8 +187,8 @@
       "actual_files": []
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "rollback-112-release-115-20261012",
         "task_id": "T003",
@@ -213,7 +213,8 @@
       ],
       "expected_commit_message": "release: Установить готовый macOS выпуск 0.6.115",
       "parallel_safe": false,
-      "verification_kind": "installed"
+      "verification_kind": "installed",
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -276,7 +277,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: rollback-112-release-115-20261012
 Current Task: нет
-Revision: 1769
+Revision: 1771
 
 ## Цель
 
@@ -311,8 +312,8 @@ Revision: 1769
   - Файлы: docs/modules/release.md
   - Параллельность: исключительное выполнение
   - Зависимости: DOCS
-- [TODO] T003: Установить готовый macOS выпуск 0.6.115 — Ожидает
-  - Git Commit: [PENDING] release: Установить готовый macOS выпуск 0.6.115
+- [DONE] T003: Установить готовый macOS выпуск 0.6.115 — Завершено
+  - Git Commit: [DONE] release: Установить готовый macOS выпуск 0.6.115
   - Reference: rollback-112-release-115-20261012 / T003 / implementation
   - Файлы: docs/modules/release.md
   - Параллельность: исключительное выполнение
