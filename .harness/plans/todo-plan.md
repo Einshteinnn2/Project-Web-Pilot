@@ -4,12 +4,12 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1771,
+  "plan_revision": 1773,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "rollback-112-release-115-20261012",
   "execution_scope_status": "ACTIVE",
-  "delivery_status": "IN_PROGRESS",
+  "delivery_status": "READY_FOR_ACCEPTANCE",
   "objective": "Подвести черту: новая парная поставка 0.6.115 из базы 0.6.112 и синхронизация GitHub main перед рефакторингом.",
   "acceptance_criteria": [
     "Исходники приложения соответствуют базе 0.6.112, новый номер 0.6.115.",
@@ -217,8 +217,8 @@
       "actual_files": []
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "rollback-112-release-115-20261012",
         "task_id": "T004",
@@ -246,7 +246,8 @@
       ],
       "expected_commit_message": "release: Опубликовать 0.6.115 и синхронизировать новую линию main",
       "parallel_safe": false,
-      "verification_kind": "package"
+      "verification_kind": "package",
+      "actual_files": []
     }
   ],
   "blocked_reason": null,
@@ -274,10 +275,10 @@
 ## Состояние
 
 Execution Scope Status: ACTIVE
-Delivery Status: IN_PROGRESS
+Delivery Status: READY_FOR_ACCEPTANCE
 Scope: rollback-112-release-115-20261012
 Current Task: нет
-Revision: 1771
+Revision: 1773
 
 ## Цель
 
@@ -318,8 +319,8 @@ Revision: 1771
   - Файлы: docs/modules/release.md
   - Параллельность: исключительное выполнение
   - Зависимости: T002, DOCS
-- [TODO] T004: Опубликовать 0.6.115 и синхронизировать новую линию main — Ожидает
-  - Git Commit: [PENDING] release: Опубликовать 0.6.115 и синхронизировать новую линию main
+- [DONE] T004: Опубликовать 0.6.115 и синхронизировать новую линию main — Завершено
+  - Git Commit: [DONE] release: Опубликовать 0.6.115 и синхронизировать новую линию main
   - Reference: rollback-112-release-115-20261012 / T004 / implementation
   - Файлы: docs/modules/release.md
   - Параллельность: исключительное выполнение
