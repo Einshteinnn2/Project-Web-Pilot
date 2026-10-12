@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1762,
+  "plan_revision": 1763,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "rollback-112-release-115-20261012",
@@ -38,7 +38,7 @@
     ]
   },
   "baseline_commit": "a1cd02424932d4666fd43cbcd6a61a7f2d5e2a31",
-  "current_task_id": "T001",
+  "current_task_id": null,
   "context_pack": {
     "documents": [
       {
@@ -62,8 +62,8 @@
   },
   "tasks": [
     {
-      "implementation_status": "IN_PROGRESS",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "rollback-112-release-115-20261012",
         "task_id": "T001",
@@ -93,7 +93,11 @@
         "Копии settings/workspaces загрузить и сохранить кодом базы в tmp вне Git; сравнить данные до/после без вывода секретов. Незапланированная потеря значимых полей блокирует поставку; реальные данные не писать, временные копии удалить."
       ],
       "expected_commit_message": "chore: Подготовить восстановленную базу и источник 0.6.115",
-      "parallel_safe": false
+      "parallel_safe": false,
+      "actual_files": [
+        "package.json",
+        "package-lock.json"
+      ]
     },
     {
       "implementation_status": "TODO",
@@ -253,8 +257,8 @@
 Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: rollback-112-release-115-20261012
-Current Task: T001
-Revision: 1762
+Current Task: нет
+Revision: 1763
 
 ## Цель
 
@@ -271,8 +275,8 @@ Revision: 1762
 Выполнение: sequential; разрешено: true; лимит: 4
 Причина: Все задачи поставки зависят друг от друга и используют общий main/staging/manifest; отдельные исполнители не дают независимой работы.
 
-- [IN_PROGRESS] T001: Подготовить восстановленную базу и источник 0.6.115 — В работе
-  - Git Commit: [PENDING] chore: Подготовить восстановленную базу и источник 0.6.115
+- [DONE] T001: Подготовить восстановленную базу и источник 0.6.115 — Завершено
+  - Git Commit: [DONE] chore: Подготовить восстановленную базу и источник 0.6.115
   - Reference: rollback-112-release-115-20261012 / T001 / implementation
   - Файлы: package.json, package-lock.json, docs/planning/rollback-112-release-115-spec.md
   - Параллельность: исключительное выполнение
