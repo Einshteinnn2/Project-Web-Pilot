@@ -4,7 +4,7 @@
 ```json
 {
   "schema_version": 1,
-  "plan_revision": 1767,
+  "plan_revision": 1769,
   "project_id": "cf944136-d1fc-4bd5-9ea0-e46d1fe230e7",
   "project_name": "Project Web Pilot",
   "scope_id": "rollback-112-release-115-20261012",
@@ -157,8 +157,8 @@
       ]
     },
     {
-      "implementation_status": "TODO",
-      "commit_status": "PENDING",
+      "implementation_status": "DONE",
+      "commit_status": "DONE",
       "commit_ref": {
         "scope_id": "rollback-112-release-115-20261012",
         "task_id": "T002",
@@ -183,7 +183,8 @@
       ],
       "expected_commit_message": "release: Собрать единственный парный выпуск 0.6.115",
       "parallel_safe": false,
-      "verification_kind": "package"
+      "verification_kind": "package",
+      "actual_files": []
     },
     {
       "implementation_status": "TODO",
@@ -275,7 +276,7 @@ Execution Scope Status: ACTIVE
 Delivery Status: IN_PROGRESS
 Scope: rollback-112-release-115-20261012
 Current Task: нет
-Revision: 1767
+Revision: 1769
 
 ## Цель
 
@@ -304,8 +305,8 @@ Revision: 1767
   - Файлы: README.md, docs/architecture/OVERVIEW.md, docs/modules/release.md, docs/modules/auto-plan.md, docs/modules/auto-plan-send.md, docs/modules/context-delivery.md, docs/modules/session-runtime.md, docs/modules/workspace-sessions.md, docs/modules/workspace-sidebar-ui.md, docs/modules/project-archive.md, docs/modules/chromium-diagnostics.md, docs/planning/archive-deletion-recovery-spec.md, docs/planning/rollback-112-release-115-spec.md, docs/modules/parallel-execution-acceptance.md, docs/modules/plan-view.md, docs/modules/release-verification.md
   - Параллельность: исключительное выполнение
   - Зависимости: T001
-- [TODO] T002: Собрать единственный парный выпуск 0.6.115 — Ожидает
-  - Git Commit: [PENDING] release: Собрать единственный парный выпуск 0.6.115
+- [DONE] T002: Собрать единственный парный выпуск 0.6.115 — Завершено
+  - Git Commit: [DONE] release: Собрать единственный парный выпуск 0.6.115
   - Reference: rollback-112-release-115-20261012 / T002 / implementation
   - Файлы: docs/modules/release.md
   - Параллельность: исключительное выполнение
