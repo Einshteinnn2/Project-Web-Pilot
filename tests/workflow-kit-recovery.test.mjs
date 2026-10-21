@@ -545,4 +545,7 @@ test('Windows Node execution does not invalidate Workflow Kit inspection', { ski
 
   execFileSync(process.execPath, ['--version'], { cwd: root, encoding: 'utf8', windowsHide: true });
   assert.equal(inspectionInputs(root).key, before, 'launching worker Node must not invalidate inspection');
+
+  await fs.appendFile(localNode, Buffer.from([0]));
+  assert.notEqual(inspectionInputs(root).key, before, 'changing the Node binary must invalidate inspection');
 });
