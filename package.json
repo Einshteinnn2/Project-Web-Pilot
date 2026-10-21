@@ -12,7 +12,7 @@
     "prestart": "npm run stage:workflow-kit && npm run stage:page-observer",
     "start": "electron .",
     "pretest": "npm run stage:workflow-kit && npm run stage:page-observer",
-    "test": "node --test --test-concurrency=2 tests/*.test.mjs",
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
     "presmoke": "npm run stage:workflow-kit && npm run stage:page-observer",
     "smoke": "electron . --smoke",
     "prebuild": "npm run stage:workflow-kit && npm run stage:page-observer",
