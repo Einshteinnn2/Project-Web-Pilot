@@ -36,7 +36,7 @@ export const releaseAssetNames = version => [`Project-Web-Pilot-${version}-macOS
 async function files(folder) {
   return (await fs.readdir(folder, { recursive: true, withFileTypes: true }))
     .filter(e => e.isFile() && e.name !== '.DS_Store')
-    .map(e => path.relative(folder, path.join(e.parentPath, e.name))).sort();
+    .map(e => path.relative(folder, path.join(e.parentPath, e.name)).split(path.sep).join('/')).sort();
 }
 export async function sourceSnapshot(root) {
   const result = {};
@@ -64,7 +64,7 @@ export async function verifyPackagedSources({ root, resources, version, sources 
     else if (file.startsWith('tools/codex-app-server-mcp/')) {
       const relative = file.slice('tools/codex-app-server-mcp/'.length);
       actual = await sha256File(path.join(resources, 'codex-app-server-mcp', relative));
-    } else actual = digest(extractFile(asar, file));
+    } else actual = digest(extractFile(asar, path.normalize(file)));
     if (actual !== expected) throw new Error('Packaged source mismatch: ' + file);
   }
   if (listPackage(asar).some(f => f.includes('Project Web Pilot.app'))) throw new Error('Nested app in package');
