@@ -121,7 +121,7 @@ Exec/apply_patch создают marker v2; terminal event App Server пишет 
 Автоматические (`.harness/workflow.json`):
 - `executor-channel` — `node --test tests/codex-app-server-mcp.test.mjs`: каталог из 9, описания и instructions, команды, патч и изображения на настоящем App Server, stale `Mcp-Session-Id`, наблюдение экрана, ветки Windows с подменой платформы. Части с настоящим Codex пропускаются без macOS, Codex и venv исполнителя.
 - `codex-tools-live` — `npm run check:codex-tools`.
-- `unit-all` — `npm test`, в том числе `tests/mcp-runtime.test.mjs`, `tests/check-codex-tools.test.mjs`, правила стартового сообщения в `tests/mac-runtime-switch.test.mjs`.
+- `unit-all` — `npm test`: на Windows `tests/mcp-runtime.test.mjs`, `tests/check-codex-tools.test.mjs`, `tests/windows-runtime-switch.test.mjs`; на macOS дополнительно `tests-macos/mac-runtime-switch.test.mjs` с проверкой правил стартового сообщения. macOS-набор не запускается на Windows.
 
 Ручные и живые:
 1. Пользователь, серия вызовов в новом проекте: `rg`/`cat`/`grep` без пути при `tty=false` завершаются сразу; ввод в non-TTY → `stdin is closed…`; Ctrl-C завершает non-TTY; ввод в завершившуюся сессию → финал и код, затем `Unknown or finished command session`; `seq 1 60000` → один маркер обрезки и `Original token count`; `max_output_tokens` > 8000 → 8000; строка в `yield_time_ms` отклоняется; изображения через `content_items`; блокировка OpenAI до выполнения → один неизменённый повтор.

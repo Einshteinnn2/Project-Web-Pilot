@@ -6,7 +6,6 @@ import os from 'node:os';
 import { createPackage } from '@electron/asar';
 import { execFileSync } from 'node:child_process';
 import { assertCommittedSources, buildPlatforms, PACKAGED_ROOTS, recordReleasePreflight, releaseAssetNames, sourceSnapshot, verifyPackagedSources } from '../scripts/release-all.mjs';
-import { assertSameMacDirectory } from '../scripts/check-mac-signature.mjs';
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'pilot-paired-release-'));
@@ -143,13 +142,4 @@ test('release preflight is recorded once by the script for existing app copies',
   assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), [{ path: present, device: 1, inode: 2, volumeUUID: 'V', bootSessionUUID: 'B' }]);
   await recordReleasePreflight({ root, version: '9.9.9', apps: [present], identity: async () => { throw new Error('must not re-record'); } });
   assert.equal(calls, 1);
-});
-
-test('installed app identity survives a reboot: volume UUID and inode, device only within one boot', () => {
-  const before = { device: 16777230, inode: 42, volumeUUID: 'VOL', bootSessionUUID: 'BOOT-1' };
-  assert.doesNotThrow(() => assertSameMacDirectory(before, { device: 16777234, inode: 42, volumeUUID: 'VOL', bootSessionUUID: 'BOOT-2' }, 'app'));
-  assert.throws(() => assertSameMacDirectory(before, { device: 16777234, inode: 42, volumeUUID: 'VOL', bootSessionUUID: 'BOOT-1' }, 'app'));
-  assert.throws(() => assertSameMacDirectory(before, { device: 16777230, inode: 43, volumeUUID: 'VOL', bootSessionUUID: 'BOOT-1' }, 'app'));
-  assert.throws(() => assertSameMacDirectory(before, { device: 16777230, inode: 42, volumeUUID: 'OTHER', bootSessionUUID: 'BOOT-1' }, 'app'));
-  assert.throws(() => assertSameMacDirectory({ device: 1, inode: 42 }, { device: 2, inode: 42, volumeUUID: 'VOL' }, 'legacy'));
 });

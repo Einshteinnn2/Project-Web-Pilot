@@ -100,7 +100,16 @@ export function inspectionInputs(workspace) {
   // Large native executables use filesystem identity + change time + mode, not
   // just mtime. Replacement, chmod, deletion and in-place writes invalidate readiness.
   const executableState = name => {
-    try { const s = fs.statSync(name, { bigint: true }); return [name, fs.realpathSync(name), ...['dev', 'ino', 'mode', 'size', 'mtimeNs', 'ctimeNs'].map(k => String(s[k]))]; }
+    try {
+      const s = fs.statSync(name, { bigint: true });
+      // Windows updates Node binaries' ctime on execution without changing bytes.
+      // Keep identity, mode, size and mtime; never rehash huge binaries per readiness.
+      const launchedNode = process.platform === 'win32' &&
+        [path.join(root, '.harness/runtime/node.exe'), process.execPath]
+          .some(candidate => path.resolve(name) === path.resolve(candidate));
+      return [name, fs.realpathSync(name),
+        ...['dev', 'ino', 'mode', 'size', 'mtimeNs', ...(launchedNode ? [] : ['ctimeNs'])].map(k => String(s[k]))];
+    }
     catch (error) { if (missing(error)) return [name, null]; throw error; }
   };
   const executables = [process.execPath, path.join(root, '.harness/runtime/node'), path.join(root, '.harness/runtime/node.exe'),
