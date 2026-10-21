@@ -73,7 +73,7 @@ function fixture(root, { tunnelConfigured = true, tunnelStarts = true, vps = fal
 
 
 // Windows-specific coverage retained when removing macOS-only tests.
-test('Windows: the executor runs control.py with its private Python after the components of the package are prepared', async t => {
+test('Windows: the executor runs control.py with its private Python after the components of the package are prepared', { skip: process.platform !== 'win32' }, async t => {
   const root = await temporary(t, 'web-pilot-win-executor-');
   const source = path.join(root, 'resource'), stateDir = path.join(root, 'Local', 'WebPilotCodexExecutor');
   await fs.mkdir(source, { recursive: true });
@@ -160,7 +160,7 @@ test('Windows: the executor runs control.py with its private Python after the co
   await assert.rejects(broken.control('status'), { code: 'WINDOWS_RUNTIME_PAYLOAD_MISSING' });
 });
 
-test('Windows activation: no LaunchAgent, the previous bridge is retired first, start at sign-in is written after the services are up', async t => {
+test('Windows activation: no LaunchAgent, the previous bridge is retired first, start at sign-in is written after the services are up', { skip: process.platform !== 'win32' }, async t => {
   const root = await temporary(t, 'web-pilot-win-activate-');
   const f = fixture(root);
   f.appServerRuntime.platform = 'win32';
