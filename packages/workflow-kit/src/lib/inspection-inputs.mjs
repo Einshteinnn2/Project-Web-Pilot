@@ -102,15 +102,13 @@ export function inspectionInputs(workspace) {
   const executableState = name => {
     try {
       const s = fs.statSync(name, { bigint: true });
-      // Windows updates Node executables' change-time when they are launched.
-      // The launcher runs the project Node; recovery runs this worker's Node.
-      // Hash both binaries so a normal process launch cannot invalidate inspection.
-      const launcherNode = process.platform === 'win32' &&
+      // Windows updates Node binaries' ctime on execution without changing bytes.
+      // Keep identity, mode, size and mtime; never rehash huge binaries per readiness.
+      const launchedNode = process.platform === 'win32' &&
         [path.join(root, '.harness/runtime/node.exe'), process.execPath]
           .some(candidate => path.resolve(name) === path.resolve(candidate));
       return [name, fs.realpathSync(name),
-        ...['dev', 'ino', 'mode', 'size', 'mtimeNs', ...(launcherNode ? [] : ['ctimeNs'])].map(k => String(s[k])),
-        ...(launcherNode ? [hash(fs.readFileSync(name))] : [])];
+        ...['dev', 'ino', 'mode', 'size', 'mtimeNs', ...(launchedNode ? [] : ['ctimeNs'])].map(k => String(s[k]))];
     }
     catch (error) { if (missing(error)) return [name, null]; throw error; }
   };
