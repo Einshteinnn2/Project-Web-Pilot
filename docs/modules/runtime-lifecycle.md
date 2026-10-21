@@ -105,7 +105,7 @@
 ## Проверки
 
 Автоматические (`.harness/workflow.json`):
-- `unit-all` (`npm test`): `tests/` `mac-runtime-switch`, `vps-tunnel`, `settings-chatgpt-channel`, `windows-runtime`, `windows-autostart`, `tunnel-prompt`, `tunnel-id-prompt`, `tunnel-id-runtime`, `startup-readiness` (`*.test.mjs`).
+- `unit-all` (`npm test`): тесты из `tests/*.test.mjs` на Windows и Linux; на macOS дополнительно `tests-macos/*.test.mjs` (включая `mac-runtime-switch`). Все файлы выполняются последовательно. Windows-проверки: `windows-runtime-switch`, `vps-tunnel`, `settings-chatgpt-channel`, `windows-runtime`, `windows-autostart`, `tunnel-prompt`, `tunnel-id-prompt`, `tunnel-id-runtime`, `startup-readiness`.
 - `executor-channel` (`tests/codex-app-server-mcp.test.mjs`): состояние и порты, перенос туннеля без вывода ключа, `CODEX_NOT_FOUND` до установки, selector и канал при входе, identity в C-локали, службы Windows с подменой платформы.
 - Electron smoke службы не запускает, `src/main.mjs` модульно не покрыт: после изменений — `node --check` и первый запуск установленной версии.
 
