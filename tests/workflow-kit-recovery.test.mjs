@@ -531,3 +531,18 @@ test('installed hooks pin deleted required documents atomically and preserve edi
   assert.equal(git(root,'write-tree'),index);
   assert.equal(await fs.readFile(path.join(root,'.harness/plans/todo-plan.md'),'utf8'),damaged);
 });
+
+test('Windows Node execution does not invalidate Workflow Kit inspection', { skip: process.platform !== 'win32' }, async t => {
+  const root = await fixture(t);
+  const directory = path.join(root, '.harness/runtime');
+  await fs.mkdir(directory, { recursive: true });
+  const localNode = path.join(directory, 'node.exe');
+  await fs.copyFile(process.execPath, localNode);
+  const before = inspectionInputs(root).key;
+
+  execFileSync(localNode, ['--version'], { cwd: root, encoding: 'utf8', windowsHide: true });
+  assert.equal(inspectionInputs(root).key, before, 'launching project Node must not invalidate inspection');
+
+  execFileSync(process.execPath, ['--version'], { cwd: root, encoding: 'utf8', windowsHide: true });
+  assert.equal(inspectionInputs(root).key, before, 'launching worker Node must not invalidate inspection');
+});
