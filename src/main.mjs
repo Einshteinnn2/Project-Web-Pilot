@@ -1801,7 +1801,7 @@ function registerIpc() {
 
 async function createWindow() {
   window = new BaseWindow({ name: 'main-window', title: smoke ? 'Project Web Pilot — TEST FIXTURE' : 'Project Web Pilot',
-    focusable:!smoke,
+    focusable:!smoke, show: smoke,
     width: 1440, height: 940, minWidth: 980, minHeight: 700, backgroundColor: shellBackground[shellTheme],
     windowStatePersistence: { bounds: true, displayMode: false } });
   sidebar = new WebContentsView({ webPreferences: { preload: path.join(sourceDir, 'preload.cjs'),
@@ -1848,16 +1848,19 @@ async function createWindow() {
     runtime = await fixture.createRuntime({ browser: browser.webContents, session: session.fromPartition(partition), dataDir });
   } else {
     runtime = ensureRuntimeSwitcher().createRuntime(chatgptChannel, activateRuntime);
-    // Installed services are brought up before the window is ready, as before. A computer where they are not
-    // installed yet is left to the first-run wizard, which shows progress. A failure here is shown in the
-    // sidebar and the next use of the services tries again: it must never keep the app from opening.
-    if (await appServerRuntime.prepared() && (process.platform !== 'darwin' || await inspectMacGit()))
-      await activateRuntime().catch(error => { startupError = publicError(error); });
+    // Service startup must not block the local interface.
   }
   connectController();
   createStartupFlow();
   registerIpc();
   await sidebar.webContents.loadURL(sidebarUrl);
+  if (!smoke) {
+    layout(); window.show();
+    void (async () => {
+      if (await appServerRuntime.prepared() && (process.platform !== 'darwin' || await inspectMacGit()))
+        await activateRuntime();
+    })().catch(error => { startupError = publicError(error); publish(); });
+  }
   if(!storageError){await restorePendingHandoffPages();restoreRotationPages();}
   if (startupFlow) void startupFlow.check({ prepare: startupActive });
   if (eventRuntimeChecker) {

@@ -547,9 +547,15 @@ export class MacRuntimeSwitcher {
         try { await this.retireLegacyRuntime(retireLegacy); legacyRetired = true; } catch { /* retried on the next start */ }
       }
 
-      await app.control('stop');
-      await app.configureSelector();
-      await app.configureChannel(chatgptChannel);
+      const active = this.platform === 'win32' ? await app.control('status') : null;
+      const reuse = active?.setup_complete === true && active.mcp?.ready === true && active.mcp?.owned === true
+        && active.selector?.mode === 'app-server' && active.selector?.chatgpt_channel === chatgptChannel
+        && active.selector?.mcp_url === active.mcp_url;
+      if (!reuse) {
+        await app.control('stop');
+        await app.configureSelector();
+        await app.configureChannel(chatgptChannel);
+      }
       runtime.channel = chatgptChannel;
 
       const backend = await app.ensureMcpOnly();
@@ -557,7 +563,8 @@ export class MacRuntimeSwitcher {
       const vps = await runtime.applyVps(backend.mcp_url);
       let status = backend;
       if (chatgptChannel === CHATGPT_CHANNEL_SECURE && backend.tunnel?.configured) {
-        const stable = await app.control('start', { tunnelOnly: true });
+        const stable = backend.tunnel?.running && backend.tunnel?.owned
+          ? backend : await app.control('start', { tunnelOnly: true });
         if (!stable.tunnel?.ready || !stable.tunnel?.owned || !stable.tunnel?.configured) {
           throw new RuntimeError('RUNTIME_NOT_READY', 'Стабильный Secure MCP Tunnel ещё не готов.');
         }

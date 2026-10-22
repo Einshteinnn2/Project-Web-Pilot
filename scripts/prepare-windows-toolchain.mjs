@@ -17,7 +17,7 @@ export const NODE_URL = `https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ARCHIVE
 export const NODE_FOLDER = `node-v${NODE_VERSION}-win-x64`;
 
 // The pinned archive of Windows components (uv, tunnel-client, ripgrep, MinGit) is published with every GitHub Release next to the packages.
-export const WINDOWS_RUNTIME_URL = `https://github.com/OleynikAleksandr/Project-Web-Pilot/releases/latest/download/${WINDOWS_RUNTIME_ARCHIVE}`;
+export const WINDOWS_RUNTIME_URL = `https://github.com/Einshteinnn2/Project-Web-Pilot/releases/download/v0.6.116/${WINDOWS_RUNTIME_ARCHIVE}`;
 
 export function windowsRuntimeSourceCandidates(root = ROOT, environment = process.env) {
   return [...new Set([

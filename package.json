@@ -1,7 +1,7 @@
 {
   "name": "project-web-pilot",
   "productName": "Project Web Pilot",
-  "version": "0.6.114",
+  "version": "0.6.116",
   "description": "Локальный проект и ChatGPT в одном окне",
   "private": true,
   "type": "module",
@@ -11,27 +11,14 @@
     "stage:workflow-kit": "node scripts/stage-workflow-kit.mjs",
     "prestart": "npm run stage:workflow-kit && npm run stage:page-observer",
     "start": "electron .",
-    "pretest": "npm run stage:workflow-kit && npm run stage:page-observer",
-    "test": "node scripts/run-tests.mjs",
-    "test:mac": "node -e \"if (process.platform !== 'darwin') process.exit(1)\" && node --test --test-concurrency=1 tests-macos/*.test.mjs",
-    "presmoke": "npm run stage:workflow-kit && npm run stage:page-observer",
-    "smoke": "electron . --smoke",
-    "prebuild": "npm run stage:workflow-kit && npm run stage:page-observer",
-    "build": "node scripts/release-all.mjs",
-    "prebuild:mac": "npm run stage:workflow-kit && npm run stage:page-observer",
-    "build:mac": "npm run check:mac-signing && npm run prepare:mac && npm run build:mac:package && npm run sign:mac && npm run release:mac",
+    "build": "npm run build:win",
     "prebuild:win": "npm run stage:workflow-kit && npm run stage:page-observer",
     "build:win": "npm run prepare:win && npm run build:win:package && npm run verify:win",
     "prepare:win": "node scripts/prepare-windows-toolchain.mjs",
     "build:win:package": "electron-packager . \"Project Web Pilot\" --platform=win32 --arch=x64 --out=.harness/runtime/build --overwrite --asar --extra-resource=resources --extra-resource=tools/codex-app-server-mcp --extra-resource=.harness/runtime/windows-payload --extra-resource=.harness/runtime/windows-node --ignore=\"^/(?!(src|node_modules)(/|$)|(package\\.json|LICENSE)$)\"",
     "verify:win": "node scripts/verify-windows-package.mjs",
-    "prepare:mac": "node scripts/prepare-mac-toolchain.mjs",
-    "build:mac:package": "electron-packager . \"Project Web Pilot\" --platform=darwin --arch=arm64 --out=.harness/runtime/build --overwrite --app-bundle-id=com.oleynik.ProjectWebPilot --extend-info=resources/mac-permissions.plist --asar --extra-resource=resources --extra-resource=tools/codex-app-server-mcp --extra-resource=.harness/runtime/mac-tools --ignore=\"^/(?!(src|node_modules)(/|$)|(package\\.json|LICENSE)$)\"",
-    "release:mac": "node scripts/release-mac.mjs",
     "stage:page-observer": "node scripts/stage-page-observer.mjs",
-    "check:codex-tools": "node scripts/check-codex-tools.mjs",
-    "check:mac-signing": "node scripts/sign-mac-bundle.mjs --check",
-    "sign:mac": "node scripts/sign-mac-bundle.mjs"
+    "check:codex-tools": "node scripts/check-codex-tools.mjs"
   },
   "engines": {
     "node": "^24.21.0"

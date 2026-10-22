@@ -9,8 +9,8 @@ import { ZipError, extractZip, fileReader, zipEntries, zipEntryData } from './zi
 const execFile = promisify(execFileCallback);
 // The pinned archive of the Windows package. Since 0.6.96 only its vendor folder is used:
 // uv, tunnel-client, ripgrep and MinGit for the Codex App Server executor and for Workflow Kit.
-export const WINDOWS_RUNTIME_ARCHIVE = 'Windows-Codex-Local-2026-09-10.zip';
-export const WINDOWS_RUNTIME_SHA256 = '1f041488ad97d8abf1984fd3521afb8abe15f50b8df3d3e11f1cc4248e019d98';
+export const WINDOWS_RUNTIME_ARCHIVE = 'Windows-Codex-Local-2026-10-22.zip';
+export const WINDOWS_RUNTIME_SHA256 = '0721b2e1a717ecbead8771aee1aa251401e53d5ab59f890b226eb8ed0cad9bb9';
 const WINDOWS_RUNTIME_FOLDER = 'Windows-Codex-Local';
 // Vendor archive id -> the name under which control.py of the executor reads the executable from tools.json.
 export const WINDOWS_VENDOR_TOOLS = Object.freeze({ uv: 'uv', 'tunnel-client': 'tunnel_client', ripgrep: 'rg', git: 'git' });
