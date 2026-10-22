@@ -47,6 +47,27 @@ export function windowsWorkflowEnvironment(toolsDir, tools, environment = {}, ap
     Path: [api.join(gitHome, 'cmd'), api.join(gitHome, 'usr', 'bin'), oldPath].filter(Boolean).join(';') };
 }
 
+// Restore or upgrade extracted tools without deleting an executable that Windows is running.
+async function mergeVendorFiles(source, destination) {
+  await fs.mkdir(destination, { recursive: true });
+  for (const entry of await fs.readdir(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name), to = path.join(destination, entry.name);
+    if (entry.isDirectory()) { await mergeVendorFiles(from, to); continue; }
+    if (!entry.isFile()) throw new WindowsRuntimeError('WINDOWS_RUNTIME_ARCHIVE_INVALID', 'Недопустимый файл в комплекте Windows.');
+    if (await exists(to) && await sha256File(from) === await sha256File(to)) continue;
+    const temporary = to + '.webpilot-new';
+    try {
+      await fs.copyFile(from, temporary);
+      await fs.rename(temporary, to);
+    } catch (error) {
+      if (error?.code === 'EPERM' || error?.code === 'EACCES')
+        throw new WindowsRuntimeError('WINDOWS_RUNTIME_UPDATE_IN_USE',
+          'Работающий компонент Windows нельзя заменить. Закройте Web Pilot и повторите обновление после перезапуска Windows.');
+      throw error;
+    } finally { await fs.rm(temporary, { force: true }).catch(() => {}); }
+  }
+}
+
 // Prepares what the executor cannot prepare itself on Windows, where there is no system Python:
 // the four vendor tools from the pinned archive and the private Python environment that runs control.py.
 export class WindowsExecutorBootstrap {
@@ -174,12 +195,17 @@ export class WindowsExecutorBootstrap {
       await fs.rm(staging, { recursive: true, force: true }).catch(() => {});
       throw error;
     } finally { await reader.close(); }
-    // The marker goes first and comes back last: an interrupted swap is simply repeated.
-    await fs.rm(marker, { force: true });
-    await fs.rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-    await fs.rename(staging, target);
-    await fs.writeFile(marker + '.tmp', JSON.stringify({ schema_version: 1, archive_sha256: this.expectedSha256, tools: recorded }, null, 2) + '\n', { mode: 0o600 });
-    await fs.rename(marker + '.tmp', marker);
+    // Keep running executables intact. Publish the new marker only after every file is ready.
+    try {
+      await fs.mkdir(target, { recursive: true });
+      for (const id of Object.keys(WINDOWS_VENDOR_TOOLS)) {
+        const from = path.join(staging, id), to = path.join(target, id);
+        if (await exists(to)) await mergeVendorFiles(from, to);
+        else await fs.rename(from, to);
+      }
+      await fs.writeFile(marker + '.tmp', JSON.stringify({ schema_version: 1, archive_sha256: this.expectedSha256, tools: recorded }, null, 2) + '\n', { mode: 0o600 });
+      await fs.rename(marker + '.tmp', marker);
+    } finally { await fs.rm(staging, { recursive: true, force: true }).catch(() => {}); }
     return recorded;
   }
 
