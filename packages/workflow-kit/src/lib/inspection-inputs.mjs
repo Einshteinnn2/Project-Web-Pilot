@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 import { VERSION, MANIFEST, CONFIG, PLAN, hash, check, safePath, readJSON } from './common.mjs';
 import { git, gitPath } from './git.mjs';
 import { listPlans } from './session-plans.mjs';
@@ -34,7 +35,7 @@ function treeFiles(root, relative, files) {
 
 // Shared by the trusted worker and full inspection. No project code is imported.
 // Hash contents, including missing-file sentinels; timestamps are never a validity proof.
-export function inspectionInputs(workspace) {
+export function inspectionInputs(workspace, platform = process.platform) {
   const root = fs.realpathSync(workspace);
   const locations = git(root, ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir', '--shared-index-path']).stdout.trim().split('\n');
   const [gitDir, commonDir, sharedIndex] = locations;
@@ -97,11 +98,29 @@ export function inspectionInputs(workspace) {
   files.add(path.join(root, '.harness/runtime/worktrees', hash(index).slice(0, 20), 'hook-acknowledgements.json'));
   const states = [...files].sort().map(file => [file, fileState(file)]);
   const transaction = Boolean(states.find(([file]) => file === path.join(gitDir, 'workflow-kit/transaction.json'))?.[1]);
-  // Large native executables use filesystem identity + change time + mode, not
-  // just mtime. Replacement, chmod, deletion and in-place writes invalidate readiness.
+  // Windows changes node.exe ctime during execution, even if its bytes are unchanged.
+  // Hash the executable content instead of trusting mutable timestamps.
+  // Stream in bounded chunks to avoid loading the entire runtime binary into memory.
+  const executableHash = name => {
+    const digest = createHash('sha256');
+    const fd = fs.openSync(name, 'r');
+    try {
+      const chunk = Buffer.allocUnsafe(256 * 1024);
+      let count;
+      while ((count = fs.readSync(fd, chunk, 0, chunk.length, null)) > 0) {
+        digest.update(chunk.subarray(0, count));
+      }
+    } finally { fs.closeSync(fd); }
+    return digest.digest('hex');
+  };
   const executableState = name => {
-    try { const s = fs.statSync(name, { bigint: true }); return [name, fs.realpathSync(name), ...['dev', 'ino', 'mode', 'size', 'mtimeNs', 'ctimeNs'].map(k => String(s[k]))]; }
-    catch (error) { if (missing(error)) return [name, null]; throw error; }
+    try {
+      const stat = fs.statSync(name, { bigint: true });
+      const windowsNode = platform === 'win32' && path.basename(name).toLowerCase() === 'node.exe';
+      const metadata = ['dev', 'ino', 'mode', 'size', 'mtimeNs', ...(windowsNode ? [] : ['ctimeNs'])]
+        .map(key => String(stat[key]));
+      return [name, fs.realpathSync(name), ...metadata, ...(windowsNode ? [executableHash(name)] : [])];
+    } catch (error) { if (missing(error)) return [name, null]; throw error; }
   };
   const executables = [process.execPath, path.join(root, '.harness/runtime/node'), path.join(root, '.harness/runtime/node.exe'),
     path.join(root, '.harness/runtime/git/cmd/git.exe')];
