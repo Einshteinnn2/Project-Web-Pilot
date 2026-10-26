@@ -458,6 +458,45 @@ test('planning inventory and real inspection key change on repeated dirty edits 
   assert.match(recover(root).text,/Предыдущего закрытого плана нет/);
 });
 
+test('Windows node.exe inspection ignores launch-only ctime but detects same-size tampering', async t => {
+  const root = await fixture(t);
+  const runtime = path.join(root, '.harness/runtime');
+  await fs.mkdir(runtime, { recursive: true });
+  const node = path.join(runtime, 'node.exe');
+  const time = new Date(1700000000000);
+  await fs.writeFile(node, 'runtime-v1');
+  await fs.utimes(node, time, time);
+  const windowsBefore = inspectionInputs(root, 'win32').key;
+  const linuxBefore = inspectionInputs(root, 'linux').key;
+  const before = await fs.stat(node, { bigint: true });
+
+  // Same bytes and mtime, different ctime: the Windows launcher triggers this.
+  await new Promise(resolve => setTimeout(resolve, 40));
+  await fs.utimes(node, time, time);
+  const after = await fs.stat(node, { bigint: true });
+  assert.equal(after.mtimeNs, before.mtimeNs);
+  assert.notEqual(after.ctimeNs, before.ctimeNs, 'fixture must change ctime');
+  assert.equal(inspectionInputs(root, 'win32').key, windowsBefore);
+  assert.notEqual(inspectionInputs(root, 'linux').key, linuxBefore);
+
+  // Same file, size and mtime, but different bytes: must invalidate readiness.
+  await fs.writeFile(node, 'runtime-v2');
+  await fs.utimes(node, time, time);
+  assert.equal((await fs.stat(node)).size, Number(before.size));
+  assert.notEqual(inspectionInputs(root, 'win32').key, windowsBefore);
+});
+
+test('Windows real node.exe launch does not invalidate inspection', { skip: process.platform !== 'win32' }, async t => {
+  const root = await fixture(t);
+  const runtime = path.join(root, '.harness/runtime');
+  await fs.mkdir(runtime, { recursive: true });
+  const node = path.join(runtime, 'node.exe');
+  await fs.copyFile(process.execPath, node);
+  const before = inspectionInputs(root).key;
+  execFileSync(node, ['--version'], { stdio: 'ignore' });
+  assert.equal(inspectionInputs(root).key, before);
+});
+
 test('NONE carries verified closure, all previous tasks and immutable specification references', async t => {
   const root=await fixture(t), input=scopeInput();
   input.tasks=input.tasks.slice(0,1);
